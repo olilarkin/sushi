@@ -31,6 +31,7 @@
 
 #ifdef SUSHI_BUILD_WITH_VST3
 #include "library/vst3x/vst3x_editor_host.h"
+#include "library/vst3x/vst3x_plugin_window.h"
 #endif
 
 namespace sushi::internal::engine::controller_impl {
@@ -46,6 +47,8 @@ public:
 
     std::pair<control::ControlStatus, control::EditorRect> open_editor(int processor_id, void* parent_handle) override;
 
+    std::pair<control::ControlStatus, control::EditorRect> open_editor(int processor_id) override;
+
     control::ControlStatus close_editor(int processor_id) override;
 
     std::pair<control::ControlStatus, bool> is_editor_open(int processor_id) const override;
@@ -59,6 +62,7 @@ private:
 
 #ifdef SUSHI_BUILD_WITH_VST3
     std::unordered_map<ObjectId, std::unique_ptr<vst3::Vst3xEditorHost>> _editors;
+    std::unordered_map<ObjectId, std::unique_ptr<vst3::PluginWindow>> _windows;
     control::EditorResizeCallback _resize_callback;
     mutable std::mutex _mutex;
 #endif

@@ -57,6 +57,17 @@ if (MSVC)
 endif()
 
 install(TARGETS sushi RUNTIME DESTINATION bin BUNDLE DESTINATION Applications)
+
+############################
+#  sushi-gui (Cocoa) target #
+############################
+
+if(APPLE AND SUSHI_WITH_VST3)
+    add_executable(sushi-gui MACOSX_BUNDLE main_cocoa.mm)
+    target_compile_options(sushi-gui PRIVATE ${SUSHI_COMPILE_OPTIONS} -fobjc-arc)
+    target_link_libraries(sushi-gui PRIVATE sushi_library ${APP_LINK_LIBRARIES} "-framework Cocoa")
+    install(TARGETS sushi-gui BUNDLE DESTINATION Applications)
+endif()
 foreach(ITEM ${DOC_FILES_INSTALL})
     install(FILES ${ITEM} DESTINATION share/sushi/doc)
 endforeach()

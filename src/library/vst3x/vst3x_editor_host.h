@@ -64,6 +64,7 @@ public:
     void close();
     bool is_open() const;
     bool set_content_scale_factor(float scale_factor);
+    bool notify_size(int width, int height);
 
     // IPlugFrame
     Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView* view,
