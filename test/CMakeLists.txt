@@ -196,6 +196,13 @@ endif()
 if (${SUSHI_WITH_VST3})
     set(TEST_FILES ${TEST_FILES} unittests/library/vst3x_wrapper_test.cpp)
     set(TEST_HELPER_FILES ${TEST_HELPER_FILES} ${PROJECT_SOURCE_DIR}/src/library/vst3x/vst3x_editor_host.cpp)
+    if (APPLE)
+        set(TEST_HELPER_FILES ${TEST_HELPER_FILES} ${PROJECT_SOURCE_DIR}/src/library/vst3x/vst3x_plugin_window_mac.mm)
+        set_source_files_properties(${PROJECT_SOURCE_DIR}/src/library/vst3x/vst3x_plugin_window_mac.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    else()
+        set(TEST_HELPER_FILES ${TEST_HELPER_FILES} ${PROJECT_SOURCE_DIR}/src/library/vst3x/vst3x_plugin_window_stub.cpp)
+    endif()
     set(TEST_COMPILE_DEFINITIONS ${TEST_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_VST3)
     if (APPLE)
         # When building with Xcode the result of TARGET_BUNDLE_DIR returns .bundle instead of .vst3 so we need to replace it

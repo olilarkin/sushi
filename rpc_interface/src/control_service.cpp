@@ -2050,6 +2050,62 @@ grpc::Status SessionControlService::RestoreSession(grpc::ServerContext* /*contex
     return to_grpc_status(status);
 }
 
+grpc::Status EditorControlService::HasEditor(grpc::ServerContext* /*context*/,
+                                             const sushi_rpc::ProcessorIdentifier* request,
+                                             sushi_rpc::GenericBoolValue* response)
+{
+    auto [status, has_editor] = _controller->has_editor(request->id());
+    if (status != sushi::control::ControlStatus::OK)
+    {
+        return to_grpc_status(status);
+    }
+    response->set_value(has_editor);
+    return grpc::Status::OK;
+}
+
+grpc::Status EditorControlService::OpenEditor(grpc::ServerContext* /*context*/,
+                                              const sushi_rpc::ProcessorIdentifier* request,
+                                              sushi_rpc::EditorInfo* response)
+{
+    auto [status, rect] = _controller->open_editor(request->id());
+    if (status != sushi::control::ControlStatus::OK)
+    {
+        return to_grpc_status(status);
+    }
+    response->set_width(rect.width);
+    response->set_height(rect.height);
+    return grpc::Status::OK;
+}
+
+grpc::Status EditorControlService::CloseEditor(grpc::ServerContext* /*context*/,
+                                               const sushi_rpc::ProcessorIdentifier* request,
+                                               sushi_rpc::GenericVoidValue* /*response*/)
+{
+    auto status = _controller->close_editor(request->id());
+    return to_grpc_status(status);
+}
+
+grpc::Status EditorControlService::IsEditorOpen(grpc::ServerContext* /*context*/,
+                                                const sushi_rpc::ProcessorIdentifier* request,
+                                                sushi_rpc::GenericBoolValue* response)
+{
+    auto [status, is_open] = _controller->is_editor_open(request->id());
+    if (status != sushi::control::ControlStatus::OK)
+    {
+        return to_grpc_status(status);
+    }
+    response->set_value(is_open);
+    return grpc::Status::OK;
+}
+
+grpc::Status EditorControlService::SetContentScaleFactor(grpc::ServerContext* /*context*/,
+                                                         const sushi_rpc::ContentScaleRequest* request,
+                                                         sushi_rpc::GenericVoidValue* /*response*/)
+{
+    auto status = _controller->set_content_scale_factor(request->processor().id(), request->scale_factor());
+    return to_grpc_status(status);
+}
+
 NotificationControlService::NotificationControlService(sushi::control::SushiControl* controller) : _controller{controller},
                                                                                                _audio_graph_controller{controller->audio_graph_controller()}
 {

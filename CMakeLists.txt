@@ -440,11 +440,22 @@ if (${SUSHI_WITH_VST3})
                                 src/library/vst3x/vst3x_utils.h
                                 src/library/vst3x/vst3x_processor_factory.h
                                 src/library/vst3x/vst3x_editor_host.h
+                                src/library/vst3x/vst3x_plugin_window.h
                                 src/library/vst3x/vst3x_wrapper.cpp
                                 src/library/vst3x/vst3x_host_app.cpp
                                 src/library/vst3x/vst3x_utils.cpp
                                 src/library/vst3x/vst3x_file_utils.cpp
                                 src/library/vst3x/vst3x_editor_host.cpp)
+
+    if (APPLE)
+        set(ADDITIONAL_VST3_SOURCES ${ADDITIONAL_VST3_SOURCES}
+            src/library/vst3x/vst3x_plugin_window_mac.mm)
+        set_source_files_properties(src/library/vst3x/vst3x_plugin_window_mac.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    else()
+        set(ADDITIONAL_VST3_SOURCES ${ADDITIONAL_VST3_SOURCES}
+            src/library/vst3x/vst3x_plugin_window_stub.cpp)
+    endif()
 
     # Linked libraries
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} vst3_host sdk)
