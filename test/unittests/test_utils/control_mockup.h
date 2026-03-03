@@ -859,6 +859,11 @@ public:
         return {ControlStatus::UNSUPPORTED_OPERATION, {0, 0}};
     }
 
+    std::pair<ControlStatus, EditorRect> open_editor(int /*processor_id*/) override
+    {
+        return {ControlStatus::UNSUPPORTED_OPERATION, {0, 0}};
+    }
+
     ControlStatus close_editor(int /*processor_id*/) override
     {
         return ControlStatus::UNSUPPORTED_OPERATION;

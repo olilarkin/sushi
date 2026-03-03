@@ -294,6 +294,21 @@ private:
     sushi::control::SessionController* _controller;
 };
 
+class EditorControlService : public EditorController::Service
+{
+public:
+    EditorControlService(sushi::control::SushiControl* controller) : _controller{controller->editor_controller()} {}
+
+    grpc::Status HasEditor(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::GenericBoolValue* response) override;
+    grpc::Status OpenEditor(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::EditorInfo* response) override;
+    grpc::Status CloseEditor(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::GenericVoidValue* response) override;
+    grpc::Status IsEditorOpen(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::GenericBoolValue* response) override;
+    grpc::Status SetContentScaleFactor(grpc::ServerContext* context, const sushi_rpc::ContentScaleRequest* request, sushi_rpc::GenericVoidValue* response) override;
+
+private:
+    sushi::control::EditorController* _controller;
+};
+
 using AsyncService = sushi_rpc::NotificationController::WithAsyncMethod_SubscribeToParameterUpdates<
                      sushi_rpc::NotificationController::WithAsyncMethod_SubscribeToProcessorChanges<
                      sushi_rpc::NotificationController::WithAsyncMethod_SubscribeToTrackChanges<

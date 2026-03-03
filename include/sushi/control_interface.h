@@ -650,6 +650,7 @@ public:
 
     [[nodiscard]] virtual std::pair<ControlStatus, bool> has_editor(int processor_id) const = 0;
     virtual std::pair<ControlStatus, EditorRect> open_editor(int processor_id, void* parent_handle) = 0;
+    virtual std::pair<ControlStatus, EditorRect> open_editor(int processor_id) = 0;
     virtual ControlStatus close_editor(int processor_id) = 0;
     [[nodiscard]] virtual std::pair<ControlStatus, bool> is_editor_open(int processor_id) const = 0;
     virtual void set_resize_callback(EditorResizeCallback callback) = 0;
