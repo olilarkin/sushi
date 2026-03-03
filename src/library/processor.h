@@ -296,6 +296,8 @@ public:
      */
     virtual bool supports_programs() const {return false;}
 
+    virtual bool has_editor() const {return false;}
+
     /**
      * @brief Get the number of stored programs in the processor
      * @return The number of programs
