@@ -150,6 +150,20 @@ bool Vst3xEditorHost::set_content_scale_factor(float scale_factor)
     return false;
 }
 
+bool Vst3xEditorHost::notify_size(int width, int height)
+{
+    if (!_view || _in_resize)
+    {
+        return false;
+    }
+
+    _in_resize = true;
+    Steinberg::ViewRect rect{0, 0, width, height};
+    auto result = _view->onSize(&rect);
+    _in_resize = false;
+    return result == Steinberg::kResultOk;
+}
+
 Steinberg::tresult PLUGIN_API Vst3xEditorHost::queryInterface(const Steinberg::TUID iid, void** obj)
 {
     if (Steinberg::FUnknownPrivate::iidEqual(iid, Steinberg::IPlugFrame::iid))

@@ -40,6 +40,7 @@ GrpcServer::GrpcServer(const std::string& listen_address,
                                                                    _audio_routing_control_service{std::make_unique<AudioRoutingControlService>(controller)},
                                                                    _osc_control_service{std::make_unique<OscControlService>(controller)},
                                                                    _session_control_service{std::make_unique<SessionControlService>(controller)},
+                                                                   _editor_control_service{std::make_unique<EditorControlService>(controller)},
                                                                    _notification_control_service{std::make_unique<NotificationControlService>(controller)},
                                                                    _server_builder{std::make_unique<grpc::ServerBuilder>()},
                                                                    _running{false}
@@ -87,6 +88,7 @@ bool GrpcServer::start()
     _server_builder->RegisterService(_audio_routing_control_service.get());
     _server_builder->RegisterService(_osc_control_service.get());
     _server_builder->RegisterService(_session_control_service.get());
+    _server_builder->RegisterService(_editor_control_service.get());
     _server_builder->RegisterService(_notification_control_service.get());
 
     _async_rpc_queue = _server_builder->AddCompletionQueue();
