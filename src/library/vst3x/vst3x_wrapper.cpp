@@ -32,6 +32,8 @@ ELK_DISABLE_SHORTEN_64_TO_32
 
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "public.sdk/source/vst/vstpresetfile.h"
 #include "public.sdk/source/common/memorystream.h"
 
@@ -125,6 +127,14 @@ ProcessorReturnCode Vst3xWrapper::init(float sample_rate)
     {
         _setup_file_program_handling();
     }
+
+    auto* view = _instance.controller()->createView(Steinberg::Vst::ViewType::kEditor);
+    if (view)
+    {
+        _has_editor = true;
+        view->release();
+    }
+
     return ProcessorReturnCode::OK;
 }
 
@@ -145,6 +155,16 @@ void Vst3xWrapper::configure(float sample_rate)
     {
         set_enabled(true);
     }
+}
+
+bool Vst3xWrapper::has_editor() const
+{
+    return _has_editor;
+}
+
+Steinberg::Vst::IEditController* Vst3xWrapper::edit_controller() const
+{
+    return _instance.controller();
 }
 
 void Vst3xWrapper::process_event(const RtEvent& event)

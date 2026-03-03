@@ -846,6 +846,37 @@ public:
 };
 
 
+class EditorControllerMockup : public EditorController, public TestableController
+{
+public:
+    std::pair<ControlStatus, bool> has_editor(int /*processor_id*/) const override
+    {
+        return {ControlStatus::OK, false};
+    }
+
+    std::pair<ControlStatus, EditorRect> open_editor(int /*processor_id*/, void* /*parent_handle*/) override
+    {
+        return {ControlStatus::UNSUPPORTED_OPERATION, {0, 0}};
+    }
+
+    ControlStatus close_editor(int /*processor_id*/) override
+    {
+        return ControlStatus::UNSUPPORTED_OPERATION;
+    }
+
+    std::pair<ControlStatus, bool> is_editor_open(int /*processor_id*/) const override
+    {
+        return {ControlStatus::OK, false};
+    }
+
+    void set_resize_callback(EditorResizeCallback /*callback*/) override {}
+
+    ControlStatus set_content_scale_factor(int /*processor_id*/, float /*scale_factor*/) override
+    {
+        return ControlStatus::UNSUPPORTED_OPERATION;
+    }
+};
+
 class ControlMockup : public SushiControl
 {
 public:
@@ -860,7 +891,8 @@ public:
                                    &_audio_routing_controller_mockup,
                                    &_cv_gate_controller_mockup,
                                    &_osc_controller_mockup,
-                                   &_session_controller_mockup) {}
+                                   &_session_controller_mockup,
+                                   &_editor_controller_mockup) {}
 
     ControlStatus subscribe_to_notifications(NotificationType /* type */, ControlListener* /* listener */) override
     {
@@ -947,6 +979,11 @@ public:
         return &_session_controller_mockup;
     }
 
+    EditorControllerMockup* editor_controller_mockup()
+    {
+        return &_editor_controller_mockup;
+    }
+
 private:
 
     SystemControllerMockup       _system_controller_mockup;
@@ -961,6 +998,7 @@ private:
     CvGateControllerMockup       _cv_gate_controller_mockup;
     OscControllerMockup          _osc_controller_mockup;
     SessionControllerMockup      _session_controller_mockup;
+    EditorControllerMockup       _editor_controller_mockup;
 
     std::vector<TestableController*> _controllers{&_system_controller_mockup,
                                                   &_transport_controller_mockup,
@@ -973,7 +1011,8 @@ private:
                                                   &_audio_routing_controller_mockup,
                                                   &_cv_gate_controller_mockup,
                                                   &_osc_controller_mockup,
-                                                  &_session_controller_mockup};
+                                                  &_session_controller_mockup,
+                                                  &_editor_controller_mockup};
 };
 
 } // end namespace sushi::control
