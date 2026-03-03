@@ -439,10 +439,12 @@ if (${SUSHI_WITH_VST3})
                                 src/library/vst3x/vst3x_host_app.h
                                 src/library/vst3x/vst3x_utils.h
                                 src/library/vst3x/vst3x_processor_factory.h
+                                src/library/vst3x/vst3x_editor_host.h
                                 src/library/vst3x/vst3x_wrapper.cpp
                                 src/library/vst3x/vst3x_host_app.cpp
                                 src/library/vst3x/vst3x_utils.cpp
-                                src/library/vst3x/vst3x_file_utils.cpp)
+                                src/library/vst3x/vst3x_file_utils.cpp
+                                src/library/vst3x/vst3x_editor_host.cpp)
 
     # Linked libraries
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} vst3_host sdk)
@@ -593,6 +595,7 @@ set(SOURCE_FILES
     src/engine/controller/cv_gate_controller.cpp
     src/engine/controller/osc_controller.cpp
     src/engine/controller/session_controller.cpp
+    src/engine/controller/editor_controller.cpp
     src/engine/controller/real_time_controller.cpp
     src/factories/base_factory.cpp
     src/factories/reactive_factory.cpp

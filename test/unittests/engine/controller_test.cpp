@@ -18,6 +18,7 @@
 #include "engine/controller/parameter_controller.cpp"
 #include "engine/controller/program_controller.cpp"
 #include "engine/controller/cv_gate_controller.cpp"
+#include "engine/controller/editor_controller.cpp"
 
 using namespace sushi;
 using namespace sushi::internal;

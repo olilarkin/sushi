@@ -23,6 +23,7 @@
 
 #include <utility>
 #include <memory>
+#include <functional>
 #include <string>
 #include <optional>
 #include <vector>
@@ -632,6 +633,30 @@ public:
     virtual ControlStatus restore_session(const SessionState& state) = 0;
 };
 
+struct EditorRect
+{
+    int width;
+    int height;
+};
+
+using EditorResizeCallback = std::function<bool(int processor_id, int width, int height)>;
+
+class EditorController
+{
+public:
+    virtual ~EditorController() = default;
+
+    [[nodiscard]] virtual std::pair<ControlStatus, bool> has_editor(int processor_id) const = 0;
+    virtual std::pair<ControlStatus, EditorRect> open_editor(int processor_id, void* parent_handle) = 0;
+    virtual ControlStatus close_editor(int processor_id) = 0;
+    [[nodiscard]] virtual std::pair<ControlStatus, bool> is_editor_open(int processor_id) const = 0;
+    virtual void set_resize_callback(EditorResizeCallback callback) = 0;
+    virtual ControlStatus set_content_scale_factor(int processor_id, float scale_factor) = 0;
+
+protected:
+    EditorController() = default;
+};
+
 class ControlNotification
 {
 public:
@@ -672,6 +697,7 @@ public:
     CvGateController*       cv_gate_controller() {return _cv_gate_controller;}
     OscController*          osc_controller() {return _osc_controller;}
     SessionController*      session_controller() {return _session_controller;}
+    EditorController*       editor_controller() {return _editor_controller;}
 
     virtual ControlStatus   subscribe_to_notifications(NotificationType type, ControlListener* listener) = 0;
 
@@ -687,18 +713,20 @@ protected:
                  AudioRoutingController* audio_routing_controller,
                  CvGateController*       cv_gate_controller,
                  OscController*          osc_controller,
-                 SessionController*      session_controller) : _system_controller(system_controller),
-                                                               _transport_controller(transport_controller),
-                                                               _timing_controller(timing_controller),
-                                                               _keyboard_controller(keyboard_controller),
-                                                               _audio_graph_controller(audio_graph_controller),
-                                                               _program_controller(program_controller),
-                                                               _parameter_controller(parameter_controller),
-                                                               _midi_controller(midi_controller),
-                                                               _audio_routing_controller(audio_routing_controller),
-                                                               _cv_gate_controller(cv_gate_controller),
-                                                               _osc_controller(osc_controller),
-                                                               _session_controller(session_controller){}
+                 SessionController*      session_controller,
+                 EditorController*       editor_controller) : _system_controller(system_controller),
+                                                              _transport_controller(transport_controller),
+                                                              _timing_controller(timing_controller),
+                                                              _keyboard_controller(keyboard_controller),
+                                                              _audio_graph_controller(audio_graph_controller),
+                                                              _program_controller(program_controller),
+                                                              _parameter_controller(parameter_controller),
+                                                              _midi_controller(midi_controller),
+                                                              _audio_routing_controller(audio_routing_controller),
+                                                              _cv_gate_controller(cv_gate_controller),
+                                                              _osc_controller(osc_controller),
+                                                              _session_controller(session_controller),
+                                                              _editor_controller(editor_controller){}
 
 private:
     SystemController*           _system_controller;
@@ -713,6 +741,7 @@ private:
     CvGateController*           _cv_gate_controller;
     OscController*              _osc_controller;
     SessionController*          _session_controller;
+    EditorController*           _editor_controller;
 };
 
 } // end namespace sushi::control
