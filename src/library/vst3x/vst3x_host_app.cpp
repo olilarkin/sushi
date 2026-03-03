@@ -270,11 +270,26 @@ bool PluginInstance::load_plugin(const std::string& plugin_path, const std::stri
         return false;
     }
 
-    res = controller->initialize(static_cast<Steinberg::Vst::IHostApplication*>(_host_app));
-    if (res != Steinberg::kResultOk)
+    // Only initialize the controller if it's a separate object from the component.
+    // Single-component plugins (IPlug2, JUCE) implement both IComponent and
+    // IEditController on the same object, which is already initialized above.
+    Steinberg::Vst::IEditController* component_as_controller = nullptr;
+    bool separate_controller = true;
+    if (component->queryInterface(Steinberg::Vst::IEditController::iid,
+                                  reinterpret_cast<void**>(&component_as_controller)) == Steinberg::kResultOk)
     {
-        ELKLOG_LOG_ERROR("Failed to initialize component with error code: {}", res);
-        return false;
+        component_as_controller->release();
+        separate_controller = false;
+    }
+
+    if (separate_controller)
+    {
+        res = controller->initialize(static_cast<Steinberg::Vst::IHostApplication*>(_host_app));
+        if (res != Steinberg::kResultOk)
+        {
+            ELKLOG_LOG_ERROR("Failed to initialize controller with error code: {}", res);
+            return false;
+        }
     }
 
     res = controller->setComponentHandler(component_handler);
@@ -335,10 +350,6 @@ bool PluginInstance::load_plugin_from_component(Steinberg::Vst::IComponent* comp
 
     _query_extension_interfaces();
 
-    if (_connect_components() == false)
-    {
-        ELKLOG_LOG_ERROR("Failed to connect component to editor");
-    }
     return true;
 }
 

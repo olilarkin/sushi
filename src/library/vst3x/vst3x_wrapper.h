@@ -108,6 +108,11 @@ public:
 
     ProcessorReturnCode set_property_value(ObjectId property_id, const std::string& value) override;
 
+    bool has_editor() const override;
+
+    Steinberg::Vst::IEditController* edit_controller() const;
+
+
     bool supports_programs() const override {return _supports_programs;}
 
     int program_count() const override {return _program_count;}
@@ -219,6 +224,7 @@ private:
     };
 
     float _sample_rate;
+    bool  _has_editor{false};
     bool  _supports_programs{false};
     bool  _internal_programs{false};
     bool  _file_based_programs{false};

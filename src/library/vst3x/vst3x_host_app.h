@@ -85,9 +85,9 @@ public:
 
     Steinberg::tresult PLUGIN_API queryInterface (const Steinberg::TUID iid, void** obj) override;
 
-    Steinberg::tresult PLUGIN_API beginEdit (Steinberg::Vst::ParamID /*id*/) override {return Steinberg::kNotImplemented;}
+    Steinberg::tresult PLUGIN_API beginEdit (Steinberg::Vst::ParamID /*id*/) override {return Steinberg::kResultOk;}
     Steinberg::tresult PLUGIN_API performEdit (Steinberg::Vst::ParamID parameter_id, Steinberg::Vst::ParamValue normalized_value) override;
-    Steinberg::tresult PLUGIN_API endEdit (Steinberg::Vst::ParamID /*parameter_id*/) override {return Steinberg::kNotImplemented;}
+    Steinberg::tresult PLUGIN_API endEdit (Steinberg::Vst::ParamID /*parameter_id*/) override {return Steinberg::kResultOk;}
     Steinberg::tresult PLUGIN_API restartComponent (Steinberg::int32 flags) override;
 
     // From elk::IComponentHandlerExtension

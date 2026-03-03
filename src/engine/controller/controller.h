@@ -42,6 +42,7 @@
 #include "cv_gate_controller.h"
 #include "osc_controller.h"
 #include "session_controller.h"
+#include "editor_controller.h"
 
 #ifndef SUSHI_CONTROLLER_H
 #define SUSHI_CONTROLLER_H
@@ -130,6 +131,7 @@ private:
     controller_impl::CvGateController       _cv_gate_controller_impl;
     controller_impl::OscController          _osc_controller_impl;
     controller_impl::SessionController      _session_controller_impl;
+    controller_impl::EditorController       _editor_controller_impl;
 
     dispatcher::BaseEventDispatcher*        _event_dispatcher;
 };

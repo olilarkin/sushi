@@ -62,7 +62,8 @@ Controller::Controller(engine::BaseEngine* engine,
                                                                                                   &_audio_routing_controller_impl,
                                                                                                   &_cv_gate_controller_impl,
                                                                                                   &_osc_controller_impl,
-                                                                                                  &_session_controller_impl),
+                                                                                                  &_session_controller_impl,
+                                                                                                  &_editor_controller_impl),
                                                                              _system_controller_impl(engine->audio_input_channels(),
                                                                                                      engine->audio_output_channels()),
                                                                              _transport_controller_impl(engine),
@@ -78,7 +79,8 @@ Controller::Controller(engine::BaseEngine* engine,
                                                                              _session_controller_impl(engine,
                                                                                                       midi_dispatcher,
                                                                                                       audio_frontend,
-                                                                                                      this)
+                                                                                                      this),
+                                                                             _editor_controller_impl(engine->processor_container())
 {
     _event_dispatcher = engine->event_dispatcher();
     _processors = engine->processor_container();
@@ -206,6 +208,7 @@ void Controller::_handle_audio_graph_notifications(const AudioGraphNotificationE
         }
         case AudioGraphNotificationEvent::Action::PROCESSOR_REMOVED_FROM_TRACK:
         {
+            _editor_controller_impl.close_editor(static_cast<int>(event->processor()));
             _notify_processor_listeners(event, control::ProcessorAction::DELETED);
             break;
         }
