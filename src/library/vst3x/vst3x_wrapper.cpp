@@ -743,7 +743,7 @@ bool Vst3xWrapper::_setup_event_buses()
     for (int i = 0; i < output_buses; ++i)
     {
         auto res = _instance.component()->activateBus(Steinberg::Vst::MediaTypes::kEvent,
-                                                      Steinberg::Vst::BusDirections::kInput, i, Steinberg::TBool(true));
+                                                      Steinberg::Vst::BusDirections::kOutput, i, Steinberg::TBool(true));
         if (res != Steinberg::kResultOk)
         {
             ELKLOG_LOG_ERROR("Failed to activate plugin output event bus {}", i);
@@ -760,12 +760,26 @@ bool Vst3xWrapper::_setup_channels()
     Steinberg::Vst::SpeakerArrangement output_arr = speaker_arr_from_channels(_current_output_channels);
 
     /* numIns and numOuts refer to the number of buses, not channels, the docs are very vague on this point */
-    auto res = _instance.processor()->setBusArrangements(&input_arr, (_max_input_channels == 0)? 0:1, &output_arr, 1);
+    int num_input_buses = (_max_input_channels == 0) ? 0 : 1;
+    auto res = _instance.processor()->setBusArrangements(&input_arr, num_input_buses, &output_arr, 1);
     if (res != Steinberg::kResultOk)
     {
         ELKLOG_LOG_ERROR("Failed to set a valid channel arrangement");
         return false;
     }
+
+    /* Re-activate audio buses after setBusArrangements, since some plugins (e.g. IPlug2)
+     * recreate their internal bus list inside setBusArrangements, losing prior activation state */
+    for (int i = 0; i < num_input_buses; ++i)
+    {
+        _instance.component()->activateBus(Steinberg::Vst::MediaTypes::kAudio,
+                                           Steinberg::Vst::BusDirections::kInput, i, Steinberg::TBool(true));
+    }
+    _instance.component()->activateBus(Steinberg::Vst::MediaTypes::kAudio,
+                                       Steinberg::Vst::BusDirections::kOutput, 0, Steinberg::TBool(true));
+
+    _process_data.numInputs = num_input_buses;
+
     return true;
 }
 
