@@ -41,3 +41,6 @@
 [submodule "third-party/elk-plugin-extensions"]
 	path = third-party/elk-plugin-extensions
 	url = ../elk-plugin-extensions.git
+[submodule "third-party/clap"]
+	path = third-party/clap
+	url = https://github.com/free-audio/clap.git

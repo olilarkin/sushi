@@ -413,6 +413,11 @@ TEST_F(TestJsonConfigurator, TestPluginSchema)
     plugin.AddMember("uid", vst3_uid, test_cfg.GetAllocator());
     ASSERT_TRUE(_accessor->validate_against_schema(test_cfg, JsonSection::TRACKS));
 
+    /* type = clap; requires path */
+    plugin["type"] = "clap";
+    plugin.RemoveMember("uid");
+    ASSERT_TRUE(_accessor->validate_against_schema(test_cfg, JsonSection::TRACKS));
+
     /* type = LV2; requires name & uri */
     plugin["type"] = "lv2";
     ASSERT_FALSE(_accessor->validate_against_schema(test_cfg, JsonSection::TRACKS));

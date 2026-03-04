@@ -1,0 +1,34 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [
+                {
+                    "engine_channel" : 0,
+                    "track_channel" : 0
+                }
+            ],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "path" : "/Users/oli/Library/Audio/Plug-Ins/CLAP/IPlugEffect.clap",
+                    "name" : "IPlugEffect",
+                    "type" : "clap"
+                }
+            ]
+        }
+    ],
+    "midi" : {
+        "track_connections" : [],
+        "program_change_connections" : []
+    }
+}
