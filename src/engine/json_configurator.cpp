@@ -1045,6 +1045,15 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
         plugin_path = plugin_def["path"].GetString();
         plugin_type = PluginType::VST3X;
     }
+    else if (type == "clap")
+    {
+        plugin_type = PluginType::CLAP;
+        plugin_path = plugin_def["path"].GetString();
+        if (plugin_def.HasMember("uid"))
+        {
+            plugin_uid = plugin_def["uid"].GetString();
+        }
+    }
     else // Anything else should have been caught by the validation step before this
     {
         plugin_type = PluginType::LV2;

@@ -56,6 +56,7 @@ enum class PluginType
     INTERNAL,
     VST2X,
     VST3X,
+    CLAP,
     LV2
 };
 

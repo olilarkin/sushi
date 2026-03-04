@@ -53,6 +53,7 @@ configure_file(
 # The defaults enable all options and select APIs available for either Xenomai or macOS
 set(SUSHI_WITH_JACK_DEFAULT OFF)
 set(SUSHI_WITH_VST2_DEFAULT OFF)
+set(SUSHI_WITH_CLAP_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -77,6 +78,7 @@ if (APPLE)
     set(SUSHI_WITH_ALSA_MIDI_DEFAULT OFF)
     set(SUSHI_WITH_RT_MIDI_DEFAULT ON)
     set(SUSHI_WITH_VST2_DEFAULT OFF)
+    set(SUSHI_WITH_CLAP_DEFAULT OFF)
     set(SUSHI_WITH_LV2_DEFAULT OFF)
     set(SUSHI_WITH_LV2_MDA_TESTS_DEFAULT OFF)
     set(SUSHI_WITH_UNIT_TESTS_DEFAULT ON)
@@ -90,6 +92,7 @@ elseif (MSVC)
     set(SUSHI_WITH_ALSA_MIDI_DEFAULT OFF)
     set(SUSHI_WITH_RT_MIDI_DEFAULT ON)
     set(SUSHI_WITH_VST2_DEFAULT OFF)
+    set(SUSHI_WITH_CLAP_DEFAULT OFF)
     set(SUSHI_WITH_LV2_DEFAULT OFF)
     set(SUSHI_WITH_LV2_MDA_TESTS_DEFAULT OFF)
     set(SUSHI_WITH_UNIT_TESTS_DEFAULT ON)
@@ -130,6 +133,7 @@ option(SUSHI_WITH_APPLE_COREAUDIO "Enable Apple CoreAudio support" ${SUSHI_WITH_
 option(SUSHI_WITH_ALSA_MIDI "Enable alsa midi support" ${SUSHI_WITH_ALSA_MIDI_DEFAULT})
 option(SUSHI_WITH_RT_MIDI "Enable RtMidi support" ${SUSHI_WITH_RT_MIDI_DEFAULT})
 option(SUSHI_WITH_VST2 "Enable Vst 2 support" ${SUSHI_WITH_VST2_DEFAULT})
+option(SUSHI_WITH_CLAP "Enable CLAP support" ${SUSHI_WITH_CLAP_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -368,6 +372,26 @@ if (${SUSHI_WITH_VST2})
 
     # Compile definitions
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_VST2 -D__cdecl=)
+endif()
+
+################
+# CLAP setup   #
+################
+
+if (${SUSHI_WITH_CLAP})
+    message("Building with CLAP support.")
+    set(CLAP_SDK_PATH "${PROJECT_SOURCE_DIR}/third-party/clap")
+    set(ADDITIONAL_CLAP_SOURCES
+        src/library/clap/clap_wrapper.h
+        src/library/clap/clap_wrapper.cpp
+        src/library/clap/clap_host_context.h
+        src/library/clap/clap_host_context.cpp
+        src/library/clap/clap_processor_factory.h
+        src/library/clap/clap_processor_factory.cpp
+        src/library/clap/clap_editor_host.h
+        src/library/clap/clap_editor_host.cpp)
+    set(INCLUDE_DIRS ${INCLUDE_DIRS} "${CLAP_SDK_PATH}/include")
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CLAP)
 endif()
 
 ###############
@@ -675,6 +699,7 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_APPLE_COREAUDIO_SOURCES}"
                                    "${ADDITIONAL_VST2_SOURCES}"
                                    "${ADDITIONAL_VST3_SOURCES}"
+                                   "${ADDITIONAL_CLAP_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
                                    "${MIDI_SOURCES}")
 

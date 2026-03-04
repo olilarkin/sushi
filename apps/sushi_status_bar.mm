@@ -169,6 +169,7 @@ static NSString* plugin_type_string(PluginType type)
         case PluginType::VST2X:    return @"vst2";
         case PluginType::VST3X:    return @"vst3";
         case PluginType::LV2:      return @"lv2";
+        case PluginType::CLAP:     return @"clap";
     }
     return @"";
 }
