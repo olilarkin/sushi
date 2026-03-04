@@ -49,6 +49,14 @@ PluginRegistry::new_instance(const PluginInfo& plugin_info,
                 _factories[plugin_info.type] = std::move(new_factory);
                 break;
             }
+            case PluginType::CLAP:
+            {
+                // CLAP support currently reuses the VST2 hosting path until a dedicated
+                // wrapper is introduced.
+                std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<vst2::Vst2xProcessorFactory>();
+                _factories[plugin_info.type] = std::move(new_factory);
+                break;
+            }
             case PluginType::LV2:
             {
                 std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<lv2::Lv2ProcessorFactory>();

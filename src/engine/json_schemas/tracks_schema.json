@@ -41,6 +41,24 @@ R"(
       },
       "required": ["path", "name", "type"]
     },
+    "clap_plugin" :
+    {
+      "type" : "object",
+      "properties": {
+        "path":{
+          "type": "string",
+          "minLength": 1
+        },
+        "name":{
+          "type": "string",
+          "minLength": 1
+        },
+        "type":{
+          "enum": ["clap"]
+        }
+      },
+      "required": ["path", "name", "type"]
+    },
     "vst3x_plugin" :
     {
       "type" : "object",
@@ -175,6 +193,7 @@ R"(
               {"$ref": "#/definitions/internal_plugin"},
               {"$ref": "#/definitions/vst2x_plugin"},
               {"$ref": "#/definitions/vst3x_plugin"},
+              {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }
@@ -206,6 +225,7 @@ R"(
               {"$ref": "#/definitions/internal_plugin"},
               {"$ref": "#/definitions/vst2x_plugin"},
               {"$ref": "#/definitions/vst3x_plugin"},
+              {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }
