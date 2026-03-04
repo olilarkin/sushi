@@ -35,6 +35,7 @@
 #include "sushi/terminal_utilities.h"
 #include "sushi/standalone_factory.h"
 #include "sushi/offline_factory.h"
+#include "sushi_status_bar.h"
 
 using namespace sushi;
 
@@ -129,6 +130,7 @@ static void exit_on_signal([[maybe_unused]] int sig)
 @interface SushiAppDelegate : NSObject <NSApplicationDelegate>
 {
     std::unique_ptr<Sushi> _sushi;
+    SushiStatusBar* _statusBar;
     int _argc;
     char** _argv;
 }
@@ -218,11 +220,19 @@ static void exit_on_signal([[maybe_unused]] int sig)
         [NSApp terminate:nil];
         return;
     }
+
+    _statusBar = [[SushiStatusBar alloc] initWithController:_sushi->controller()];
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender
 {
     (void)sender;
+
+    if (_statusBar)
+    {
+        [_statusBar teardown];
+        _statusBar = nil;
+    }
 
     if (_sushi)
     {
@@ -245,18 +255,7 @@ int main(int argc, char* argv[])
     @autoreleasepool
     {
         NSApplication* app = [NSApplication sharedApplication];
-        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
-
-        // Main menu with Quit (Cmd+Q)
-        NSMenu* menu_bar = [[NSMenu alloc] init];
-        NSMenuItem* app_menu_item = [[NSMenuItem alloc] init];
-        [menu_bar addItem:app_menu_item];
-        NSMenu* app_menu = [[NSMenu alloc] init];
-        [app_menu addItemWithTitle:@"Quit Sushi"
-                            action:@selector(terminate:)
-                     keyEquivalent:@"q"];
-        [app_menu_item setSubmenu:app_menu];
-        [app setMainMenu:menu_bar];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
         SushiAppDelegate* delegate = [[SushiAppDelegate alloc] initWithArgc:argc argv:argv];
         [app setDelegate:delegate];
