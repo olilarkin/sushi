@@ -38,3 +38,6 @@
 [submodule "third-party/portaudio"]
 	path = third-party/portaudio
 	url = https://github.com/PortAudio/portaudio.git
+[submodule "third-party/clap"]
+	path = third-party/clap
+	url = https://github.com/free-audio/clap.git

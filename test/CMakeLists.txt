@@ -71,6 +71,7 @@ set(TEST_HELPER_FILES ${TEST_HELPER_FILES}
     ${PROJECT_SOURCE_DIR}/src/library/lv2/lv2_processor_factory.cpp
     ${PROJECT_SOURCE_DIR}/src/library/vst2x/vst2x_processor_factory.cpp
     ${PROJECT_SOURCE_DIR}/src/library/vst3x/vst3x_processor_factory.cpp
+    ${PROJECT_SOURCE_DIR}/src/library/clap/clap_processor_factory.cpp
     ${PROJECT_SOURCE_DIR}/test/unittests/test_utils/portaudio_mockup.cpp
     ${FREEVERB_SOURCES}
 )
