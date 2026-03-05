@@ -19,6 +19,7 @@
  */
 
 #include <atomic>
+#include <set>
 #include <string>
 
 #import <Cocoa/Cocoa.h>
@@ -197,6 +198,9 @@ static NSString* plugin_type_string(PluginType type)
     TimeSignature _timeSig;
     CpuTimings _cpuTimings;
     bool _trackCacheDirty;
+
+    // Set of processor IDs whose editors the user has explicitly opened
+    std::set<int> _openEditorIds;
 
     // Static info queried once
     NSString* _versionString;
@@ -534,6 +538,8 @@ static NSString* plugin_type_string(PluginType type)
     (void)sender;
 
     SushiControl* controller = _controller;
+    std::set<int> ids_to_restore = _openEditorIds;
+
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         auto* graph = controller->audio_graph_controller();
         auto* editor = controller->editor_controller();
@@ -562,23 +568,17 @@ static NSString* plugin_type_string(PluginType type)
             }
         }
 
-        // Second pass: close all if any were open, open all if none were
-        for (const auto& track : graph->get_all_tracks())
+        if (any_open)
         {
-            auto [status, processors] = graph->get_track_processors(track.id);
-            if (status != ControlStatus::OK)
+            // Close all currently open editors
+            for (const auto& track : graph->get_all_tracks())
             {
-                continue;
-            }
-            for (const auto& proc : processors)
-            {
-                auto [has_status, has_ed] = editor->has_editor(proc.id);
-                if (has_status != ControlStatus::OK || !has_ed)
+                auto [status, processors] = graph->get_track_processors(track.id);
+                if (status != ControlStatus::OK)
                 {
                     continue;
                 }
-
-                if (any_open)
+                for (const auto& proc : processors)
                 {
                     auto [open_status, is_open] = editor->is_editor_open(proc.id);
                     if (open_status == ControlStatus::OK && is_open)
@@ -586,10 +586,14 @@ static NSString* plugin_type_string(PluginType type)
                         editor->close_editor(proc.id);
                     }
                 }
-                else
-                {
-                    editor->open_editor(proc.id);
-                }
+            }
+        }
+        else
+        {
+            // Reopen only editors that were previously user-opened
+            for (int proc_id : ids_to_restore)
+            {
+                editor->open_editor(proc_id);
             }
         }
     });
@@ -677,12 +681,14 @@ static NSString* plugin_type_string(PluginType type)
     // so we must call from a background thread to avoid deadlocking.
     if (is_open)
     {
+        _openEditorIds.erase(processor_id);
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             editor->close_editor(processor_id);
         });
     }
     else
     {
+        _openEditorIds.insert(processor_id);
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             editor->open_editor(processor_id);
         });
@@ -693,30 +699,34 @@ static NSString* plugin_type_string(PluginType type)
 {
     (void)sender;
 
-    // All work on background thread: EditorController uses dispatch_sync(main_queue)
-    // internally, which can't execute while NSMenu tracking holds the main run loop.
-    SushiControl* controller = _controller;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        auto* graph = controller->audio_graph_controller();
-        auto* editor = controller->editor_controller();
-        for (const auto& track : graph->get_all_tracks())
+    // Collect all editor-capable processor IDs on main thread, then open on background
+    auto* graph = _controller->audio_graph_controller();
+    auto* editor = _controller->editor_controller();
+    for (const auto& track : graph->get_all_tracks())
+    {
+        auto [status, processors] = graph->get_track_processors(track.id);
+        if (status != ControlStatus::OK)
         {
-            auto [status, processors] = graph->get_track_processors(track.id);
-            if (status != ControlStatus::OK)
+            continue;
+        }
+        for (const auto& proc : processors)
+        {
+            auto [has_status, has_ed] = editor->has_editor(proc.id);
+            if (has_status == ControlStatus::OK && has_ed)
             {
-                continue;
+                _openEditorIds.insert(proc.id);
             }
-            for (const auto& proc : processors)
+        }
+    }
+
+    std::set<int> ids_to_open = _openEditorIds;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        for (int proc_id : ids_to_open)
+        {
+            auto [open_status, is_open] = editor->is_editor_open(proc_id);
+            if (open_status == ControlStatus::OK && !is_open)
             {
-                auto [has_status, has_ed] = editor->has_editor(proc.id);
-                if (has_status == ControlStatus::OK && has_ed)
-                {
-                    auto [open_status, is_open] = editor->is_editor_open(proc.id);
-                    if (open_status == ControlStatus::OK && !is_open)
-                    {
-                        editor->open_editor(proc.id);
-                    }
-                }
+                editor->open_editor(proc_id);
             }
         }
     });
@@ -725,6 +735,8 @@ static NSString* plugin_type_string(PluginType type)
 - (void)closeAllEditors:(id)sender
 {
     (void)sender;
+
+    _openEditorIds.clear();
 
     SushiControl* controller = _controller;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
