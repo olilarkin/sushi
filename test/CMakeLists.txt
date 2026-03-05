@@ -215,6 +215,20 @@ if (${SUSHI_WITH_VST3})
     set(TEST_DEPENDENCIES ${TEST_DEPENDENCIES} adelay vst3_host)
 endif()
 
+if (${SUSHI_WITH_AUV2})
+    set(TEST_FILES ${TEST_FILES}
+            ../src/library/auv2/auv2_processor_factory.mm
+            ../src/library/auv2/auv2_wrapper.mm
+            ../src/library/auv2/auv2_editor_host.mm)
+    set(TEST_COMPILE_DEFINITIONS ${TEST_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_AUV2)
+    set(TEST_LINK_LIBRARIES ${TEST_LINK_LIBRARIES} "-framework AudioToolbox -framework AudioUnit -framework CoreFoundation")
+    set_source_files_properties(
+            ../src/library/auv2/auv2_processor_factory.mm
+            ../src/library/auv2/auv2_wrapper.mm
+            ../src/library/auv2/auv2_editor_host.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
+
 if (${SUSHI_WITH_LV2})
     set(TEST_FILES ${TEST_FILES} unittests/library/lv2_wrapper_test.cpp)
     set(TEST_COMPILE_DEFINITIONS ${TEST_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_LV2)

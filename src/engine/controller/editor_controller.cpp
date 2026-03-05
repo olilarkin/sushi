@@ -30,7 +30,11 @@
 #include "library/clap/clap_wrapper.h"
 #endif
 
-#if defined(__APPLE__) && (defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP))
+#ifdef SUSHI_BUILD_WITH_AUV2
+#include "library/auv2/auv2_wrapper.h"
+#endif
+
+#if defined(__APPLE__) && (defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2))
 #include <dispatch/dispatch.h>
 #include <pthread.h>
 #endif
@@ -46,7 +50,7 @@ EditorController::EditorController(const BaseProcessorContainer* processors)
 
 EditorController::~EditorController()
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     auto cleanup = [this]() {
         std::lock_guard<std::mutex> lock(_mutex);
 #ifdef SUSHI_BUILD_WITH_VST3
@@ -54,6 +58,9 @@ EditorController::~EditorController()
 #endif
 #ifdef SUSHI_BUILD_WITH_CLAP
         _clap_editors.clear();
+#endif
+#ifdef SUSHI_BUILD_WITH_AUV2
+        _auv2_editors.clear();
 #endif
         _windows.clear();
     };
@@ -88,7 +95,7 @@ std::pair<control::ControlStatus, bool> EditorController::has_editor(int process
 std::pair<control::ControlStatus, control::EditorRect> EditorController::open_editor(int processor_id,
                                                                                      void* parent_handle)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     ELKLOG_LOG_DEBUG("open_editor called for processor {}", processor_id);
 
     auto processor = _processors->mutable_processor(static_cast<ObjectId>(processor_id));
@@ -187,6 +194,48 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
     }
 #endif
 
+#ifdef SUSHI_BUILD_WITH_AUV2
+    if (plugin_type == PluginType::AUV2)
+    {
+        auto* auv2_wrap = static_cast<auv2_wrapper::AUv2Wrapper*>(processor.get());
+
+        auto do_open = [&]() -> std::pair<control::ControlStatus, control::EditorRect> {
+            std::lock_guard<std::mutex> lock(_mutex);
+
+            auto id = static_cast<ObjectId>(processor_id);
+            auto it = _auv2_editors.find(id);
+            if (it != _auv2_editors.end() && it->second->is_open())
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            auto editor_host = std::make_unique<auv2_wrapper::AUv2EditorHost>(
+                auv2_wrap->audio_unit(),
+                id,
+                _resize_callback);
+
+            auto [success, rect] = editor_host->open(parent_handle);
+            if (!success)
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            _auv2_editors[id] = std::move(editor_host);
+            return {control::ControlStatus::OK, {rect.width, rect.height}};
+        };
+
+#ifdef __APPLE__
+        __block std::pair<control::ControlStatus, control::EditorRect> result;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = do_open();
+        });
+        return result;
+#else
+        return do_open();
+#endif
+    }
+#endif
+
     (void)plugin_type;
     return {control::ControlStatus::UNSUPPORTED_OPERATION, {0, 0}};
 #else
@@ -198,7 +247,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
 
 std::pair<control::ControlStatus, control::EditorRect> EditorController::open_editor(int processor_id)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     ELKLOG_LOG_DEBUG("open_editor (managed window) called for processor {}", processor_id);
 
     auto processor = _processors->mutable_processor(static_cast<ObjectId>(processor_id));
@@ -350,6 +399,65 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
     }
 #endif
 
+#ifdef SUSHI_BUILD_WITH_AUV2
+    if (plugin_type == PluginType::AUV2)
+    {
+        auto* auv2_wrap = static_cast<auv2_wrapper::AUv2Wrapper*>(processor.get());
+
+        auto do_open = [&]() -> std::pair<control::ControlStatus, control::EditorRect> {
+            std::lock_guard<std::mutex> lock(_mutex);
+
+            auto id = static_cast<ObjectId>(processor_id);
+            auto it = _auv2_editors.find(id);
+            if (it != _auv2_editors.end() && it->second->is_open())
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            ELKLOG_LOG_DEBUG("Creating PluginWindow for AUv2 processor {}", processor_id);
+            auto window = std::make_unique<vst3::PluginWindow>();
+            auto* native_view = window->create(proc_name, 640, 480);
+            if (!native_view)
+            {
+                ELKLOG_LOG_ERROR("Failed to create native window for processor {}", processor_id);
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            auto editor_host = std::make_unique<auv2_wrapper::AUv2EditorHost>(
+                auv2_wrap->audio_unit(),
+                id,
+                _resize_callback);
+
+            auto [success, rect] = editor_host->open(native_view);
+            if (!success)
+            {
+                ELKLOG_LOG_ERROR("AUv2 editor open failed for processor {}", processor_id);
+                window->close();
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+            ELKLOG_LOG_DEBUG("AUv2 editor opened: {}x{}", rect.width, rect.height);
+
+            window->resize(rect.width, rect.height);
+            window->show();
+
+            _auv2_editors[id] = std::move(editor_host);
+            _windows[id] = std::move(window);
+
+            return {control::ControlStatus::OK, {rect.width, rect.height}};
+        };
+
+#ifdef __APPLE__
+        __block std::pair<control::ControlStatus, control::EditorRect> result;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = do_open();
+        });
+        return result;
+#else
+        return do_open();
+#endif
+    }
+#endif
+
     (void)plugin_type;
     (void)proc_name;
     return {control::ControlStatus::UNSUPPORTED_OPERATION, {0, 0}};
@@ -361,7 +469,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
 
 control::ControlStatus EditorController::close_editor(int processor_id)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     ELKLOG_LOG_DEBUG("close_editor called for processor {}", processor_id);
 
     auto do_close = [&]() -> control::ControlStatus {
@@ -403,6 +511,23 @@ control::ControlStatus EditorController::close_editor(int processor_id)
         }
 #endif
 
+#ifdef SUSHI_BUILD_WITH_AUV2
+        auto auv2_it = _auv2_editors.find(id);
+        if (auv2_it != _auv2_editors.end())
+        {
+            auv2_it->second->close();
+            _auv2_editors.erase(auv2_it);
+
+            auto win_it = _windows.find(id);
+            if (win_it != _windows.end())
+            {
+                win_it->second->close();
+                _windows.erase(win_it);
+            }
+            return control::ControlStatus::OK;
+        }
+#endif
+
         return control::ControlStatus::NOT_FOUND;
     };
 
@@ -423,7 +548,7 @@ control::ControlStatus EditorController::close_editor(int processor_id)
 
 std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int processor_id) const
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     std::lock_guard<std::mutex> lock(_mutex);
 
     auto id = static_cast<ObjectId>(processor_id);
@@ -444,6 +569,14 @@ std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int pro
     }
 #endif
 
+#ifdef SUSHI_BUILD_WITH_AUV2
+    auto auv2_it = _auv2_editors.find(id);
+    if (auv2_it != _auv2_editors.end())
+    {
+        return {control::ControlStatus::OK, auv2_it->second->is_open()};
+    }
+#endif
+
     return {control::ControlStatus::OK, false};
 #else
     (void)processor_id;
@@ -453,7 +586,7 @@ std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int pro
 
 void EditorController::set_resize_callback(control::EditorResizeCallback callback)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     std::lock_guard<std::mutex> lock(_mutex);
     _resize_callback = std::move(callback);
 #else

@@ -54,6 +54,7 @@ configure_file(
 set(SUSHI_WITH_JACK_DEFAULT OFF)
 set(SUSHI_WITH_VST2_DEFAULT OFF)
 set(SUSHI_WITH_CLAP_DEFAULT OFF)
+set(SUSHI_WITH_AUV2_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -79,6 +80,7 @@ if (APPLE)
     set(SUSHI_WITH_RT_MIDI_DEFAULT ON)
     set(SUSHI_WITH_VST2_DEFAULT OFF)
     set(SUSHI_WITH_CLAP_DEFAULT OFF)
+    set(SUSHI_WITH_AUV2_DEFAULT ON)
     set(SUSHI_WITH_LV2_DEFAULT OFF)
     set(SUSHI_WITH_LV2_MDA_TESTS_DEFAULT OFF)
     set(SUSHI_WITH_UNIT_TESTS_DEFAULT ON)
@@ -134,6 +136,7 @@ option(SUSHI_WITH_ALSA_MIDI "Enable alsa midi support" ${SUSHI_WITH_ALSA_MIDI_DE
 option(SUSHI_WITH_RT_MIDI "Enable RtMidi support" ${SUSHI_WITH_RT_MIDI_DEFAULT})
 option(SUSHI_WITH_VST2 "Enable Vst 2 support" ${SUSHI_WITH_VST2_DEFAULT})
 option(SUSHI_WITH_CLAP "Enable CLAP support" ${SUSHI_WITH_CLAP_DEFAULT})
+option(SUSHI_WITH_AUV2 "Enable Audio Unit V2 support" ${SUSHI_WITH_AUV2_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -392,6 +395,28 @@ if (${SUSHI_WITH_CLAP})
         src/library/clap/clap_editor_host.cpp)
     set(INCLUDE_DIRS ${INCLUDE_DIRS} "${CLAP_SDK_PATH}/include")
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CLAP)
+endif()
+
+################
+# AUv2 setup   #
+################
+
+if (${SUSHI_WITH_AUV2})
+    message("Building with AUv2 support.")
+    set(ADDITIONAL_AUV2_SOURCES
+        src/library/auv2/auv2_wrapper.h
+        src/library/auv2/auv2_wrapper.mm
+        src/library/auv2/auv2_processor_factory.h
+        src/library/auv2/auv2_processor_factory.mm
+        src/library/auv2/auv2_editor_host.h
+        src/library/auv2/auv2_editor_host.mm)
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} "-framework AudioToolbox -framework AudioUnit -framework CoreFoundation")
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_AUV2)
+    set_source_files_properties(
+        src/library/auv2/auv2_wrapper.mm
+        src/library/auv2/auv2_processor_factory.mm
+        src/library/auv2/auv2_editor_host.mm
+        PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 endif()
 
 ###############
@@ -700,6 +725,7 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_VST2_SOURCES}"
                                    "${ADDITIONAL_VST3_SOURCES}"
                                    "${ADDITIONAL_CLAP_SOURCES}"
+                                   "${ADDITIONAL_AUV2_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
                                    "${MIDI_SOURCES}")
 
