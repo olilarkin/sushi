@@ -67,11 +67,16 @@ public:
 
     control::ControlStatus set_content_scale_factor(int processor_id, float scale_factor) override;
 
+    std::pair<control::ControlStatus, control::EditorRect> get_editor_info(int processor_id) const override;
+
+    control::ControlStatus set_editor_position(int processor_id, int x, int y) override;
+
 private:
     const BaseProcessorContainer* _processors;
 
 #if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     std::unordered_map<ObjectId, std::unique_ptr<vst3::PluginWindow>> _windows;
+    std::unordered_map<ObjectId, control::EditorRect> _saved_frames;
     control::EditorResizeCallback _resize_callback;
     mutable std::mutex _mutex;
 #endif

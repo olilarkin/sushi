@@ -183,4 +183,37 @@ void PluginWindow::set_resize_callback(WindowResizeCallback callback)
     _impl->resize_callback = std::move(callback);
 }
 
+void PluginWindow::set_position(int x, int y)
+{
+    if (!_impl->window)
+    {
+        return;
+    }
+
+    NSWindow* win = _impl->window;
+    NSRect screen_frame = [[NSScreen mainScreen] frame];
+    NSRect win_frame = [win frame];
+    // Convert from top-left screen coords to Cocoa bottom-left origin
+    CGFloat cocoa_y = screen_frame.size.height - y - win_frame.size.height;
+    [win setFrameOrigin:NSMakePoint(x, cocoa_y)];
+}
+
+void PluginWindow::get_frame(int& x, int& y, int& width, int& height) const
+{
+    if (!_impl->window)
+    {
+        x = y = width = height = 0;
+        return;
+    }
+
+    NSWindow* win = _impl->window;
+    NSRect screen_frame = [[NSScreen mainScreen] frame];
+    NSRect content = [win contentRectForFrameRect:[win frame]];
+    x = static_cast<int>(content.origin.x);
+    // Convert from Cocoa bottom-left to top-left screen coords
+    y = static_cast<int>(screen_frame.size.height - content.origin.y - content.size.height);
+    width = static_cast<int>(content.size.width);
+    height = static_cast<int>(content.size.height);
+}
+
 } // end namespace sushi::internal::vst3

@@ -880,6 +880,16 @@ public:
     {
         return ControlStatus::UNSUPPORTED_OPERATION;
     }
+
+    std::pair<ControlStatus, EditorRect> get_editor_info(int /*processor_id*/) const override
+    {
+        return {ControlStatus::UNSUPPORTED_OPERATION, {}};
+    }
+
+    ControlStatus set_editor_position(int /*processor_id*/, int /*x*/, int /*y*/) override
+    {
+        return ControlStatus::UNSUPPORTED_OPERATION;
+    }
 };
 
 class ControlMockup : public SushiControl

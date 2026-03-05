@@ -304,6 +304,8 @@ public:
     grpc::Status CloseEditor(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::GenericVoidValue* response) override;
     grpc::Status IsEditorOpen(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::GenericBoolValue* response) override;
     grpc::Status SetContentScaleFactor(grpc::ServerContext* context, const sushi_rpc::ContentScaleRequest* request, sushi_rpc::GenericVoidValue* response) override;
+    grpc::Status GetEditorInfo(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::EditorInfo* response) override;
+    grpc::Status SetEditorPosition(grpc::ServerContext* context, const sushi_rpc::EditorPositionRequest* request, sushi_rpc::GenericVoidValue* response) override;
 
 private:
     sushi::control::EditorController* _controller;
