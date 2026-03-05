@@ -136,7 +136,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             }
 
             _vst3_editors[id] = std::move(editor_host);
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -179,7 +179,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             }
 
             _clap_editors[id] = std::move(editor_host);
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -221,7 +221,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             }
 
             _auv2_editors[id] = std::move(editor_host);
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -310,6 +310,13 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             ELKLOG_LOG_DEBUG("Editor opened: {}x{}", rect.width, rect.height);
 
             window->resize(rect.width, rect.height);
+
+            auto saved_it = _saved_frames.find(id);
+            if (saved_it != _saved_frames.end())
+            {
+                window->set_position(saved_it->second.x, saved_it->second.y);
+            }
+
             window->show();
 
             _vst3_editors[id] = std::move(editor_host);
@@ -324,7 +331,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
                 }
             });
 
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -379,12 +386,19 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             ELKLOG_LOG_DEBUG("CLAP editor opened: {}x{}", rect.width, rect.height);
 
             window->resize(rect.width, rect.height);
+
+            auto saved_it = _saved_frames.find(id);
+            if (saved_it != _saved_frames.end())
+            {
+                window->set_position(saved_it->second.x, saved_it->second.y);
+            }
+
             window->show();
 
             _clap_editors[id] = std::move(editor_host);
             _windows[id] = std::move(window);
 
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -438,12 +452,19 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             ELKLOG_LOG_DEBUG("AUv2 editor opened: {}x{}", rect.width, rect.height);
 
             window->resize(rect.width, rect.height);
+
+            auto saved_it = _saved_frames.find(id);
+            if (saved_it != _saved_frames.end())
+            {
+                window->set_position(saved_it->second.x, saved_it->second.y);
+            }
+
             window->show();
 
             _auv2_editors[id] = std::move(editor_host);
             _windows[id] = std::move(window);
 
-            return {control::ControlStatus::OK, {rect.width, rect.height}};
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
 #ifdef __APPLE__
@@ -477,19 +498,26 @@ control::ControlStatus EditorController::close_editor(int processor_id)
 
         auto id = static_cast<ObjectId>(processor_id);
 
+        // Save window frame before closing for position restoration
+        auto _save_window_frame = [&](ObjectId win_id) {
+            auto win_it = _windows.find(win_id);
+            if (win_it != _windows.end())
+            {
+                control::EditorRect frame;
+                win_it->second->get_frame(frame.x, frame.y, frame.width, frame.height);
+                _saved_frames[win_id] = frame;
+                win_it->second->close();
+                _windows.erase(win_it);
+            }
+        };
+
 #ifdef SUSHI_BUILD_WITH_VST3
         auto vst3_it = _vst3_editors.find(id);
         if (vst3_it != _vst3_editors.end())
         {
             vst3_it->second->close();
             _vst3_editors.erase(vst3_it);
-
-            auto win_it = _windows.find(id);
-            if (win_it != _windows.end())
-            {
-                win_it->second->close();
-                _windows.erase(win_it);
-            }
+            _save_window_frame(id);
             return control::ControlStatus::OK;
         }
 #endif
@@ -500,13 +528,7 @@ control::ControlStatus EditorController::close_editor(int processor_id)
         {
             clap_it->second->close();
             _clap_editors.erase(clap_it);
-
-            auto win_it = _windows.find(id);
-            if (win_it != _windows.end())
-            {
-                win_it->second->close();
-                _windows.erase(win_it);
-            }
+            _save_window_frame(id);
             return control::ControlStatus::OK;
         }
 #endif
@@ -517,13 +539,7 @@ control::ControlStatus EditorController::close_editor(int processor_id)
         {
             auv2_it->second->close();
             _auv2_editors.erase(auv2_it);
-
-            auto win_it = _windows.find(id);
-            if (win_it != _windows.end())
-            {
-                win_it->second->close();
-                _windows.erase(win_it);
-            }
+            _save_window_frame(id);
             return control::ControlStatus::OK;
         }
 #endif
@@ -613,6 +629,83 @@ control::ControlStatus EditorController::set_content_scale_factor(int processor_
 #else
     (void)processor_id;
     (void)scale_factor;
+    return control::ControlStatus::UNSUPPORTED_OPERATION;
+#endif
+}
+
+std::pair<control::ControlStatus, control::EditorRect> EditorController::get_editor_info(int processor_id) const
+{
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
+    std::lock_guard<std::mutex> lock(_mutex);
+
+    auto id = static_cast<ObjectId>(processor_id);
+
+    // If window is open, return live frame
+    auto win_it = _windows.find(id);
+    if (win_it != _windows.end())
+    {
+        control::EditorRect frame;
+        win_it->second->get_frame(frame.x, frame.y, frame.width, frame.height);
+        return {control::ControlStatus::OK, frame};
+    }
+
+    // Otherwise return saved frame if available
+    auto saved_it = _saved_frames.find(id);
+    if (saved_it != _saved_frames.end())
+    {
+        return {control::ControlStatus::OK, saved_it->second};
+    }
+
+    return {control::ControlStatus::NOT_FOUND, {}};
+#else
+    (void)processor_id;
+    return {control::ControlStatus::UNSUPPORTED_OPERATION, {}};
+#endif
+}
+
+control::ControlStatus EditorController::set_editor_position(int processor_id, int x, int y)
+{
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
+    auto do_set = [&]() -> control::ControlStatus {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        auto id = static_cast<ObjectId>(processor_id);
+
+        // Always update saved frames
+        auto saved_it = _saved_frames.find(id);
+        if (saved_it != _saved_frames.end())
+        {
+            saved_it->second.x = x;
+            saved_it->second.y = y;
+        }
+        else
+        {
+            _saved_frames[id] = {x, y, 0, 0};
+        }
+
+        // If window is open, move it immediately
+        auto win_it = _windows.find(id);
+        if (win_it != _windows.end())
+        {
+            win_it->second->set_position(x, y);
+        }
+
+        return control::ControlStatus::OK;
+    };
+
+#ifdef __APPLE__
+    __block control::ControlStatus result;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        result = do_set();
+    });
+    return result;
+#else
+    return do_set();
+#endif
+#else
+    (void)processor_id;
+    (void)x;
+    (void)y;
     return control::ControlStatus::UNSUPPORTED_OPERATION;
 #endif
 }

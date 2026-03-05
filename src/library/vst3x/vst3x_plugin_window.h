@@ -44,6 +44,8 @@ public:
     void close();
     bool is_open() const;
     void set_resize_callback(WindowResizeCallback callback);
+    void set_position(int x, int y);
+    void get_frame(int& x, int& y, int& width, int& height) const;
 
 private:
     struct Impl;
