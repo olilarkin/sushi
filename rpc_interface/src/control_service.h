@@ -304,6 +304,7 @@ public:
     grpc::Status SetContentScaleFactor(grpc::ServerContext* context, const sushi_rpc::ContentScaleRequest* request, sushi_rpc::GenericVoidValue* response) override;
     grpc::Status GetEditorInfo(grpc::ServerContext* context, const sushi_rpc::ProcessorIdentifier* request, sushi_rpc::EditorInfo* response) override;
     grpc::Status SetEditorPosition(grpc::ServerContext* context, const sushi_rpc::EditorPositionRequest* request, sushi_rpc::GenericVoidValue* response) override;
+    grpc::Status CaptureEditorScreenshot(grpc::ServerContext* context, const sushi_rpc::ScreenshotRequest* request, sushi_rpc::GenericVoidValue* response) override;
 
 private:
     sushi::control::EditorController* _controller;

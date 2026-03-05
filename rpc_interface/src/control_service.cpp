@@ -2132,6 +2132,15 @@ grpc::Status EditorControlService::SetEditorPosition(grpc::ServerContext* /*cont
     return to_grpc_status(status);
 }
 
+grpc::Status EditorControlService::CaptureEditorScreenshot(grpc::ServerContext* /*context*/,
+                                                           const sushi_rpc::ScreenshotRequest* request,
+                                                           sushi_rpc::GenericVoidValue* /*response*/)
+{
+    auto status = _controller->capture_editor_screenshot(request->processor().id(), request->output_path(),
+                                                        request->max_width(), request->max_height());
+    return to_grpc_status(status);
+}
+
 NotificationControlService::NotificationControlService(sushi::control::SushiControl* controller) : _controller{controller},
                                                                                                _audio_graph_controller{controller->audio_graph_controller()}
 {

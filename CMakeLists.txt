@@ -466,7 +466,7 @@ if (${SUSHI_WITH_VST3})
         set(VST3_HOST_SOURCES
             ${VST3_HOST_SOURCES}
             "${VST3_SDK_PATH}/public.sdk/source/vst/hosting/module_mac.mm")
-        set(AUDIOHOST_PLATFORM_LIBS "-framework Cocoa")
+        set(AUDIOHOST_PLATFORM_LIBS "-framework Cocoa -framework ScreenCaptureKit")
         set(VST3_COMPILE_FLAGS "${VST3_COMPILE_FLAGS} -fobjc-arc -Wno-unqualified-std-cast-call")
     endif()
 

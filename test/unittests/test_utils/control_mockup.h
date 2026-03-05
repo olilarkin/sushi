@@ -890,6 +890,11 @@ public:
     {
         return ControlStatus::UNSUPPORTED_OPERATION;
     }
+
+    ControlStatus capture_editor_screenshot(int /*processor_id*/, const std::string& /*output_path*/, int /*max_width*/, int /*max_height*/) override
+    {
+        return ControlStatus::UNSUPPORTED_OPERATION;
+    }
 };
 
 class ControlMockup : public SushiControl
