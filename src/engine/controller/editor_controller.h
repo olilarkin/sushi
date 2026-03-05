@@ -39,6 +39,11 @@
 #include "library/vst3x/vst3x_plugin_window.h"
 #endif
 
+#ifdef SUSHI_BUILD_WITH_AUV2
+#include "library/auv2/auv2_editor_host.h"
+#include "library/vst3x/vst3x_plugin_window.h"
+#endif
+
 namespace sushi::internal::engine::controller_impl {
 
 class EditorController : public control::EditorController
@@ -65,7 +70,7 @@ public:
 private:
     const BaseProcessorContainer* _processors;
 
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP)
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
     std::unordered_map<ObjectId, std::unique_ptr<vst3::PluginWindow>> _windows;
     control::EditorResizeCallback _resize_callback;
     mutable std::mutex _mutex;
@@ -77,6 +82,10 @@ private:
 
 #ifdef SUSHI_BUILD_WITH_CLAP
     std::unordered_map<ObjectId, std::unique_ptr<clap_wrapper::ClapEditorHost>> _clap_editors;
+#endif
+
+#ifdef SUSHI_BUILD_WITH_AUV2
+    std::unordered_map<ObjectId, std::unique_ptr<auv2_wrapper::AUv2EditorHost>> _auv2_editors;
 #endif
 };
 
