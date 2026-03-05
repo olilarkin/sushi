@@ -46,4 +46,16 @@ bool PluginWindow::is_open() const
 
 void PluginWindow::set_resize_callback(WindowResizeCallback /*callback*/) {}
 
+void PluginWindow::set_position(int /*x*/, int /*y*/) {}
+
+void PluginWindow::get_frame(int& x, int& y, int& width, int& height) const
+{
+    x = y = width = height = 0;
+}
+
+bool PluginWindow::capture_screenshot(const std::string& /*output_path*/, int /*max_width*/, int /*max_height*/) const
+{
+    return false;
+}
+
 } // end namespace sushi::internal::vst3

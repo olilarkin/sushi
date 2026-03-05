@@ -710,4 +710,39 @@ control::ControlStatus EditorController::set_editor_position(int processor_id, i
 #endif
 }
 
+control::ControlStatus EditorController::capture_editor_screenshot(int processor_id, const std::string& output_path, int max_width, int max_height)
+{
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2)
+    auto do_capture = [&]() -> control::ControlStatus {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        auto id = static_cast<ObjectId>(processor_id);
+        auto win_it = _windows.find(id);
+        if (win_it == _windows.end())
+        {
+            return control::ControlStatus::NOT_FOUND;
+        }
+
+        bool success = win_it->second->capture_screenshot(output_path, max_width, max_height);
+        return success ? control::ControlStatus::OK : control::ControlStatus::ERROR;
+    };
+
+#ifdef __APPLE__
+    __block control::ControlStatus result;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        result = do_capture();
+    });
+    return result;
+#else
+    return do_capture();
+#endif
+#else
+    (void)processor_id;
+    (void)output_path;
+    (void)max_width;
+    (void)max_height;
+    return control::ControlStatus::UNSUPPORTED_OPERATION;
+#endif
+}
+
 } // end namespace sushi::internal::engine::controller_impl

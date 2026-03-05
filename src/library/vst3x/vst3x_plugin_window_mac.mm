@@ -21,6 +21,8 @@
 #include "vst3x_plugin_window.h"
 
 #import <Cocoa/Cocoa.h>
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
+#include <dlfcn.h>
 
 // Forward-declare the C++ callback type for the delegate
 using ResizeFn = std::function<void(int, int)>;
@@ -214,6 +216,208 @@ void PluginWindow::get_frame(int& x, int& y, int& width, int& height) const
     y = static_cast<int>(screen_frame.size.height - content.origin.y - content.size.height);
     width = static_cast<int>(content.size.width);
     height = static_cast<int>(content.size.height);
+}
+
+namespace {
+
+// Function pointer type matching CGWindowListCreateImage signature
+using CGWindowListCreateImageFunc = CGImageRef (*)(CGRect, uint32_t, uint32_t, uint32_t);
+
+CGImageRef capture_window_via_cgwindowlist(CGWindowID window_id)
+{
+    static CGWindowListCreateImageFunc fn = nullptr;
+    static bool loaded = false;
+
+    if (!loaded)
+    {
+        loaded = true;
+        void* handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY);
+        if (handle)
+        {
+            fn = reinterpret_cast<CGWindowListCreateImageFunc>(dlsym(handle, "CGWindowListCreateImage"));
+        }
+    }
+
+    if (!fn)
+    {
+        return nullptr;
+    }
+
+    return fn(CGRectNull,
+              kCGWindowListOptionIncludingWindow,
+              window_id,
+              kCGWindowImageBoundsIgnoreFraming);
+}
+
+bool capture_window_via_screencapturekit(CGWindowID window_id, NSString* path_str, NSBitmapImageFileType file_type)
+{
+    __block bool success = false;
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+
+    [SCShareableContent getShareableContentWithCompletionHandler:^(SCShareableContent* content, NSError* error) {
+        if (error || !content)
+        {
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+
+        SCWindow* target_window = nil;
+        for (SCWindow* sc_window in content.windows)
+        {
+            if (sc_window.windowID == window_id)
+            {
+                target_window = sc_window;
+                break;
+            }
+        }
+
+        if (!target_window)
+        {
+            dispatch_semaphore_signal(semaphore);
+            return;
+        }
+
+        SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:target_window];
+        SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
+        config.captureResolution = SCCaptureResolutionAutomatic;
+        config.showsCursor = NO;
+        config.shouldBeOpaque = YES;
+
+        [SCScreenshotManager captureImageWithFilter:filter
+                                      configuration:config
+                                  completionHandler:^(CGImageRef image, NSError* capture_error) {
+            if (capture_error || !image)
+            {
+                dispatch_semaphore_signal(semaphore);
+                return;
+            }
+
+            NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithCGImage:image];
+            NSData* data = [rep representationUsingType:file_type properties:@{}];
+            if (data)
+            {
+                success = [data writeToFile:path_str atomically:YES];
+            }
+
+            dispatch_semaphore_signal(semaphore);
+        }];
+    }];
+
+    dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    return success;
+}
+
+NSData* resize_and_encode(CGImageRef source, int max_width, int max_height, NSBitmapImageFileType file_type)
+{
+    size_t src_w = CGImageGetWidth(source);
+    size_t src_h = CGImageGetHeight(source);
+    size_t dst_w = src_w;
+    size_t dst_h = src_h;
+
+    if (max_width > 0 && max_height > 0 && (src_w > static_cast<size_t>(max_width) || src_h > static_cast<size_t>(max_height)))
+    {
+        double scale_w = static_cast<double>(max_width) / src_w;
+        double scale_h = static_cast<double>(max_height) / src_h;
+        double scale = std::min(scale_w, scale_h);
+        dst_w = static_cast<size_t>(src_w * scale);
+        dst_h = static_cast<size_t>(src_h * scale);
+    }
+    else if (max_width > 0 && src_w > static_cast<size_t>(max_width))
+    {
+        double scale = static_cast<double>(max_width) / src_w;
+        dst_w = max_width;
+        dst_h = static_cast<size_t>(src_h * scale);
+    }
+    else if (max_height > 0 && src_h > static_cast<size_t>(max_height))
+    {
+        double scale = static_cast<double>(max_height) / src_h;
+        dst_h = max_height;
+        dst_w = static_cast<size_t>(src_w * scale);
+    }
+
+    if (dst_w != src_w || dst_h != src_h)
+    {
+        CGColorSpaceRef color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CGContextRef ctx = CGBitmapContextCreate(nullptr, dst_w, dst_h, 8, dst_w * 4,
+                                                  color_space, kCGImageAlphaPremultipliedLast);
+        CGColorSpaceRelease(color_space);
+        if (!ctx)
+        {
+            return nil;
+        }
+
+        CGContextSetInterpolationQuality(ctx, kCGInterpolationHigh);
+        CGContextDrawImage(ctx, CGRectMake(0, 0, dst_w, dst_h), source);
+        CGImageRef resized = CGBitmapContextCreateImage(ctx);
+        CGContextRelease(ctx);
+        if (!resized)
+        {
+            return nil;
+        }
+
+        NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithCGImage:resized];
+        CGImageRelease(resized);
+        return [rep representationUsingType:file_type properties:@{}];
+    }
+
+    NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithCGImage:source];
+    return [rep representationUsingType:file_type properties:@{}];
+}
+
+} // anonymous namespace
+
+bool PluginWindow::capture_screenshot(const std::string& output_path, int max_width, int max_height) const
+{
+    if (!_impl->window)
+    {
+        return false;
+    }
+
+    NSWindow* win = _impl->window;
+    CGWindowID window_id = static_cast<CGWindowID>([win windowNumber]);
+
+    NSString* path_str = [NSString stringWithUTF8String:output_path.c_str()];
+    NSString* extension = [[path_str pathExtension] lowercaseString];
+    NSBitmapImageFileType file_type = NSBitmapImageFileTypePNG;
+    if ([extension isEqualToString:@"jpg"] || [extension isEqualToString:@"jpeg"])
+    {
+        file_type = NSBitmapImageFileTypeJPEG;
+    }
+
+    // Try CGWindowListCreateImage first (loaded via dlsym to bypass availability check)
+    CGImageRef image = capture_window_via_cgwindowlist(window_id);
+    if (image)
+    {
+        // Crop out the title bar to get content area only
+        NSRect frame = [win frame];
+        NSRect content_rect = [win contentRectForFrameRect:frame];
+        CGFloat scale = [win backingScaleFactor];
+        CGFloat title_bar_height = (frame.size.height - content_rect.size.height) * scale;
+        size_t img_w = CGImageGetWidth(image);
+        size_t img_h = CGImageGetHeight(image);
+
+        CGImageRef content_image = image;
+        if (title_bar_height > 0 && static_cast<size_t>(title_bar_height) < img_h)
+        {
+            CGRect crop = CGRectMake(0, title_bar_height, img_w, img_h - static_cast<size_t>(title_bar_height));
+            content_image = CGImageCreateWithImageInRect(image, crop);
+            CGImageRelease(image);
+        }
+
+        if (content_image)
+        {
+            NSData* data = resize_and_encode(content_image, max_width, max_height, file_type);
+            CGImageRelease(content_image);
+
+            if (data && [data writeToFile:path_str atomically:YES])
+            {
+                return true;
+            }
+        }
+    }
+
+    // Fall back to ScreenCaptureKit (includes window chrome)
+    return capture_window_via_screencapturekit(window_id, path_str, file_type);
 }
 
 } // end namespace sushi::internal::vst3

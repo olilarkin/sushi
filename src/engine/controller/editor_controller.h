@@ -71,6 +71,8 @@ public:
 
     control::ControlStatus set_editor_position(int processor_id, int x, int y) override;
 
+    control::ControlStatus capture_editor_screenshot(int processor_id, const std::string& output_path, int max_width, int max_height) override;
+
 private:
     const BaseProcessorContainer* _processors;
 
