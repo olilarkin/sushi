@@ -636,8 +636,10 @@ public:
 
 struct EditorRect
 {
-    int width;
-    int height;
+    int x{0};
+    int y{0};
+    int width{0};
+    int height{0};
 };
 
 using EditorResizeCallback = std::function<bool(int processor_id, int width, int height)>;
@@ -654,6 +656,8 @@ public:
     [[nodiscard]] virtual std::pair<ControlStatus, bool> is_editor_open(int processor_id) const = 0;
     virtual void set_resize_callback(EditorResizeCallback callback) = 0;
     virtual ControlStatus set_content_scale_factor(int processor_id, float scale_factor) = 0;
+    [[nodiscard]] virtual std::pair<ControlStatus, EditorRect> get_editor_info(int processor_id) const = 0;
+    virtual ControlStatus set_editor_position(int processor_id, int x, int y) = 0;
 
 protected:
     EditorController() = default;

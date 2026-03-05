@@ -2074,6 +2074,8 @@ grpc::Status EditorControlService::OpenEditor(grpc::ServerContext* /*context*/,
     }
     response->set_width(rect.width);
     response->set_height(rect.height);
+    response->set_x(rect.x);
+    response->set_y(rect.y);
     return grpc::Status::OK;
 }
 
@@ -2103,6 +2105,30 @@ grpc::Status EditorControlService::SetContentScaleFactor(grpc::ServerContext* /*
                                                          sushi_rpc::GenericVoidValue* /*response*/)
 {
     auto status = _controller->set_content_scale_factor(request->processor().id(), request->scale_factor());
+    return to_grpc_status(status);
+}
+
+grpc::Status EditorControlService::GetEditorInfo(grpc::ServerContext* /*context*/,
+                                                  const sushi_rpc::ProcessorIdentifier* request,
+                                                  sushi_rpc::EditorInfo* response)
+{
+    auto [status, rect] = _controller->get_editor_info(request->id());
+    if (status != sushi::control::ControlStatus::OK)
+    {
+        return to_grpc_status(status);
+    }
+    response->set_width(rect.width);
+    response->set_height(rect.height);
+    response->set_x(rect.x);
+    response->set_y(rect.y);
+    return grpc::Status::OK;
+}
+
+grpc::Status EditorControlService::SetEditorPosition(grpc::ServerContext* /*context*/,
+                                                      const sushi_rpc::EditorPositionRequest* request,
+                                                      sushi_rpc::GenericVoidValue* /*response*/)
+{
+    auto status = _controller->set_editor_position(request->processor().id(), request->x(), request->y());
     return to_grpc_status(status);
 }
 
