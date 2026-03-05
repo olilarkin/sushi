@@ -1054,6 +1054,11 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
             plugin_uid = plugin_def["uid"].GetString();
         }
     }
+    else if (type == "auv2")
+    {
+        plugin_type = PluginType::AUV2;
+        plugin_uid = plugin_def["uid"].GetString();
+    }
     else // Anything else should have been caught by the validation step before this
     {
         plugin_type = PluginType::LV2;

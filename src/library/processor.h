@@ -57,7 +57,8 @@ enum class PluginType
     VST2X,
     VST3X,
     CLAP,
-    LV2
+    LV2,
+    AUV2
 };
 
 /**

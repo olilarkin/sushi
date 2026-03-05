@@ -1,0 +1,29 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "uid" : "aufx:dely:appl",
+                    "name" : "AUDelay",
+                    "type" : "auv2"
+                }
+            ]
+        }
+    ],
+    "midi" : {
+        "track_connections" : [],
+        "program_change_connections" : []
+    }
+}

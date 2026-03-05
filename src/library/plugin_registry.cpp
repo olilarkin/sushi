@@ -19,6 +19,7 @@
 #include "vst2x/vst2x_processor_factory.h"
 #include "vst3x/vst3x_processor_factory.h"
 #include "clap/clap_processor_factory.h"
+#include "auv2/auv2_processor_factory.h"
 #include "lv2/lv2_processor_factory.h"
 
 namespace sushi::internal {
@@ -53,6 +54,12 @@ PluginRegistry::new_instance(const PluginInfo& plugin_info,
             case PluginType::CLAP:
             {
                 std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<clap_wrapper::ClapProcessorFactory>();
+                _factories[plugin_info.type] = std::move(new_factory);
+                break;
+            }
+            case PluginType::AUV2:
+            {
+                std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<auv2_wrapper::AUv2ProcessorFactory>();
                 _factories[plugin_info.type] = std::move(new_factory);
                 break;
             }
