@@ -660,6 +660,7 @@ public:
     virtual ControlStatus set_content_scale_factor(int processor_id, float scale_factor) = 0;
     [[nodiscard]] virtual std::pair<ControlStatus, EditorRect> get_editor_info(int processor_id) const = 0;
     virtual ControlStatus set_editor_position(int processor_id, int x, int y) = 0;
+    virtual ControlStatus capture_editor_screenshot(int processor_id, const std::string& output_path, int max_width = 0, int max_height = 0) = 0;
 
 protected:
     EditorController() = default;
