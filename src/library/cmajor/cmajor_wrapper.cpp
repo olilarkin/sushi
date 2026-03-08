@@ -306,6 +306,7 @@ CmajorWrapper::CmajorWrapper(HostControl host_control, PluginInfo plugin_info)
     _max_input_channels = MAX_TRACK_CHANNELS;
     _max_output_channels = MAX_TRACK_CHANNELS;
     _source_path = _plugin_info.path;
+    _source_code = _plugin_info.source_code;
     _register_properties();
 }
 
@@ -315,7 +316,7 @@ ProcessorReturnCode CmajorWrapper::init(float sample_rate)
 {
     _sample_rate = sample_rate;
 
-    if (!_source_path.empty())
+    if (!_source_path.empty() || !_source_code.empty())
     {
         return _compile_current_source(true);
     }
@@ -806,6 +807,7 @@ PluginInfo CmajorWrapper::info() const
     auto info = _plugin_info;
     info.type = PluginType::CMAJOR;
     info.path = _source_path;
+    info.source_code = _source_code;
     return info;
 }
 

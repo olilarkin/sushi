@@ -110,6 +110,10 @@ R"(
           "type": "string",
           "minLength": 1
         },
+        "source_code":{
+          "type": "string",
+          "minLength": 1
+        },
         "name":{
           "type": "string",
           "minLength": 1
@@ -118,7 +122,11 @@ R"(
           "enum": ["cmajor"]
         }
       },
-      "required": ["path", "name", "type"]
+      "required": ["name", "type"],
+      "anyOf": [
+        {"required": ["path"]},
+        {"required": ["source_code"]}
+      ]
     },
     "lv2_plugin" :
     {
