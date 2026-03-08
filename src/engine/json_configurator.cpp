@@ -42,6 +42,24 @@ ELKLOG_GET_LOGGER_WITH_MODULE_NAME("jsonconfig");
 
 constexpr int ERROR_DISPLAY_CHARS = 50;
 
+const ParameterDescriptor* find_property_by_name(const Processor* processor, const std::string& property_name)
+{
+    if (processor == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (const auto* descriptor : processor->all_parameters())
+    {
+        if (descriptor->type() == ParameterType::STRING && descriptor->name() == property_name)
+        {
+            return descriptor;
+        }
+    }
+
+    return nullptr;
+}
+
 const char* section_name(JsonSection section)
 {
     switch (section)
@@ -717,7 +735,7 @@ JsonConfigReturnStatus JsonConfigurator::load_initial_state()
         {
             for (const auto& property : json_state["properties"].GetObject())
             {
-                auto param = processor->parameter_from_name(property.name.GetString());
+                auto param = find_property_by_name(processor.get(), property.name.GetString());
                 if (!param)
                 {
                     ELKLOG_LOG_WARNING("Invalid property name: \"{}\"", property.name.GetString());
@@ -881,7 +899,7 @@ std::unique_ptr<Event> JsonConfigurator::_parse_event(const rapidjson::Value& js
 
     if (json_event["type"] == "property_change")
     {
-        auto parameter = processor->parameter_from_name(data["property_name"].GetString());
+        auto parameter = find_property_by_name(processor.get(), data["property_name"].GetString());
         if (parameter == nullptr)
         {
             ELKLOG_LOG_WARNING("Unrecognised property: {}", data["property_name"].GetString());
@@ -1062,7 +1080,10 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
     else if (type == "cmajor")
     {
         plugin_type = PluginType::CMAJOR;
-        plugin_path = plugin_def["path"].GetString();
+        if (plugin_def.HasMember("path"))
+        {
+            plugin_path = plugin_def["path"].GetString();
+        }
     }
     else // Anything else should have been caught by the validation step before this
     {
@@ -1074,6 +1095,10 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
     plugin_info.uid = plugin_uid;
     plugin_info.path = plugin_path;
     plugin_info.type = plugin_type;
+    if (plugin_type == PluginType::CMAJOR && plugin_def.HasMember("source_code"))
+    {
+        plugin_info.source_code = plugin_def["source_code"].GetString();
+    }
 
     auto [status, plugin_id] = _engine->create_processor(plugin_info, plugin_name);
     if (status != EngineReturnStatus::OK)

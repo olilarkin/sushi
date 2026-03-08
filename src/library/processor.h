@@ -70,12 +70,14 @@ struct PluginInfo
     std::string uid;
     std::string path;
     PluginType type;
+    std::string source_code;
 
     bool operator == (const PluginInfo& other) const
     {
         return (uid == other.uid) &&
                (path == other.path) &&
-               (type == other.type);
+               (type == other.type) &&
+               (source_code == other.source_code);
     }
 };
 
