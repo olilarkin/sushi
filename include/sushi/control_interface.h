@@ -86,7 +86,9 @@ enum class PluginType
     VST2X,
     VST3X,
     CLAP,
-    LV2
+    LV2,
+    AUV2,
+    CMAJOR
 };
 
 enum class ParameterType
@@ -249,7 +251,8 @@ enum class NotificationType
 enum class ProcessorAction
 {
     ADDED,
-    DELETED
+    DELETED,
+    UPDATED
 };
 
 enum class TrackAction

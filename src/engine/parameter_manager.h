@@ -35,6 +35,7 @@ namespace sushi::internal {
 
 namespace engine {class BaseProcessorContainer;}
 namespace dispatcher {class BaseEventDispatcher;}
+class Processor;
 
 class ParameterManagerAccessor;
 
@@ -76,6 +77,13 @@ public:
     void mark_processor_changed(ObjectId processor_id, Time timestamp);
 
     /**
+     * @brief Rebuild the tracked parameter list for a processor after its layout changes.
+     *        Existing entries are preserved when their ids are still present.
+     * @param processor_id The id of the Processor
+     */
+    void refresh_parameters(ObjectId processor_id);
+
+    /**
      * @brief Output ParameterChangedNotificationEvents for all queued parameter changes up until
      *        a given timestamp. If a parameter was queued several time, only one notification
      *        will be sent.
@@ -113,6 +121,8 @@ private:
     };
 
     using Parameters = std::unordered_map<ObjectId, std::unordered_map<ObjectId, ParameterEntry>>;
+
+    void _refresh_parameter_map(const Processor* processor, std::unordered_map<ObjectId, ParameterEntry>& param_map);
 
     std::vector<ProcessorUpdate> _processor_change_queue;
     std::vector<ParameterUpdate> _parameter_change_queue;

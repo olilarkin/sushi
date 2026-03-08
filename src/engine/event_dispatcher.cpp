@@ -379,6 +379,10 @@ void EventDispatcher::_handle_engine_notifications_internally(EngineNotification
                 _parameter_manager.mark_processor_changed(typed_event->processor(), typed_event->time());
                 break;
 
+            case AudioGraphNotificationEvent::Action::PROCESSOR_LAYOUT_CHANGED:
+                _parameter_manager.refresh_parameters(typed_event->processor());
+                break;
+
             case AudioGraphNotificationEvent::Action::PROCESSOR_DELETED:
                 _parameter_manager.untrack_parameters(typed_event->processor());
                 break;

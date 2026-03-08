@@ -292,6 +292,9 @@ inline sushi_rpc::PluginType::Type to_grpc(const sushi::control::PluginType type
         case sushi::control::PluginType::VST2X:          return sushi_rpc::PluginType::VST2X;
         case sushi::control::PluginType::VST3X:          return sushi_rpc::PluginType::VST3X;
         case sushi::control::PluginType::LV2:            return sushi_rpc::PluginType::LV2;
+        case sushi::control::PluginType::CLAP:           return sushi_rpc::PluginType::CLAP;
+        case sushi::control::PluginType::AUV2:           return sushi_rpc::PluginType::AUV2;
+        case sushi::control::PluginType::CMAJOR:         return sushi_rpc::PluginType::CMAJOR;
         default:                                         return sushi_rpc::PluginType::INTERNAL;
     }
 }
@@ -304,6 +307,9 @@ inline sushi::control::PluginType to_sushi_ext(const sushi_rpc::PluginType::Type
         case sushi_rpc::PluginType::VST2X:          return sushi::control::PluginType::VST2X;
         case sushi_rpc::PluginType::VST3X:          return sushi::control::PluginType::VST3X;
         case sushi_rpc::PluginType::LV2:            return sushi::control::PluginType::LV2;
+        case sushi_rpc::PluginType::CLAP:           return sushi::control::PluginType::CLAP;
+        case sushi_rpc::PluginType::AUV2:           return sushi::control::PluginType::AUV2;
+        case sushi_rpc::PluginType::CMAJOR:         return sushi::control::PluginType::CMAJOR;
         default:                                    return sushi::control::PluginType::INTERNAL;
     }
 }
@@ -2305,6 +2311,11 @@ void NotificationControlService::_forward_processor_notification_to_subscribers(
         case sushi::control::ProcessorAction::DELETED:
         {
             notification_content->set_action(ProcessorUpdate_Action_PROCESSOR_DELETED);
+            break;
+        }
+        case sushi::control::ProcessorAction::UPDATED:
+        {
+            notification_content->set_action(ProcessorUpdate_Action_PROCESSOR_UPDATED);
             break;
         }
         default:

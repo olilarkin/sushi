@@ -900,6 +900,16 @@ bool MidiDispatcher::_handle_audio_graph_notification(const AudioGraphNotificati
                             event->processor());
             break;
         }
+        case AudioGraphNotificationEvent::Action::PROCESSOR_LAYOUT_CHANGED:
+        {
+            auto processor_id = event->processor();
+
+            disconnect_all_cc_from_processor(processor_id);
+
+            ELKLOG_LOG_DEBUG("MidiController received a PROCESSOR_LAYOUT_CHANGED notification for processor {}",
+                             event->processor());
+            break;
+        }
         case AudioGraphNotificationEvent::Action::TRACK_DELETED:
         {
             auto track_id = event->track();

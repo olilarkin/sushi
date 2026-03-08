@@ -58,7 +58,8 @@ enum class PluginType
     VST3X,
     CLAP,
     LV2,
-    AUV2
+    AUV2,
+    CMAJOR
 };
 
 /**
@@ -161,7 +162,7 @@ public:
      * @brief Get the number of parameters of this processor.
      * @return The number of registered parameters for this processor.
      */
-    int parameter_count() const {return static_cast<int>(_parameters_by_index.size());};
+    virtual int parameter_count() const {return static_cast<int>(all_parameters().size());};
 
     /**
      * @brief Get the parameter descriptor associated with a certain name
@@ -169,7 +170,7 @@ public:
      * @return A pointer to the parameter descriptor or a null pointer
      *         if there is no processor with that name
      */
-    const ParameterDescriptor* parameter_from_name(const std::string& name) const
+    virtual const ParameterDescriptor* parameter_from_name(const std::string& name) const
     {
         auto p = _parameters.find(name);
         return (p != _parameters.end()) ? p->second.get() : nullptr;
@@ -190,7 +191,7 @@ public:
      * @brief Get all controllable parameters and properties of this processor
      * @return A list of parameter objects
      */
-    const std::vector<ParameterDescriptor*>& all_parameters() const
+    virtual std::vector<ParameterDescriptor*> all_parameters() const
     {
         return _parameters_by_index;
     }

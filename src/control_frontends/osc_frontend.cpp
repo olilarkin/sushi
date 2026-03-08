@@ -535,6 +535,66 @@ bool OSCFrontend::_remove_processor_connections(ObjectId processor_id)
     return count > 0;
 }
 
+void OSCFrontend::_reconnect_processor_connections(ObjectId processor_id)
+{
+    assert(_osc_initialized);
+
+    auto processor = _processor_container->processor(processor_id);
+    if (!processor)
+    {
+        ELKLOG_LOG_ERROR("Processor {} not found during OSC reconnect", processor_id);
+        return;
+    }
+
+    int count = 0;
+    for (const auto& connection : _connections)
+    {
+        if (connection->processor == processor_id)
+        {
+            _osc->delete_method(connection->callback);
+            count++;
+        }
+    }
+
+    _connections.erase(std::remove_if(_connections.begin(),
+                                      _connections.end(),
+                                      [&](const auto& connection) { return connection->processor == processor_id; }),
+                       _connections.end());
+
+    auto outgoing_connections = _outgoing_connections.find(processor_id);
+    if (outgoing_connections != _outgoing_connections.end())
+    {
+        auto& outputs = outgoing_connections->second;
+        for (auto output = outputs.begin(); output != outputs.end();)
+        {
+            auto parameter = processor->parameter_from_id(output->first);
+            if (!parameter)
+            {
+                output = outputs.erase(output);
+                continue;
+            }
+
+            auto prefix = parameter->type() == ParameterType::STRING ? "/property/" : "/parameter/";
+            output->second = prefix + osc::make_safe_path(std::string(processor->name()))
+                           + "/" + osc::make_safe_path(parameter->name());
+            ++output;
+        }
+    }
+
+    _connect_to_bypass_state(processor.get());
+    _connect_to_program_change(processor.get());
+    _connect_to_parameters_and_properties(processor.get());
+
+    if (_connect_from_all_parameters && _skip_outputs.count(processor->id()) == false)
+    {
+        connect_from_processor_parameters(processor->name());
+        ELKLOG_LOG_INFO("Reconnected OSC callbacks to processor {}", processor->id());
+    }
+
+    _skip_outputs.erase(processor->id());
+    ELKLOG_LOG_WARNING_IF(count == 0, "Failed to remove any OSC callbacks for processor {}", processor_id)
+}
+
 void OSCFrontend::_handle_engine_notification(const EngineNotificationEvent* event)
 {
     if (event->is_clipping_notification())
@@ -640,6 +700,11 @@ void OSCFrontend::_handle_audio_graph_notification(const AudioGraphNotificationE
         case AudioGraphNotificationEvent::Action::PROCESSOR_DELETED:
             ELKLOG_LOG_DEBUG("Received a PROCESSOR_DELETED notification for processor {}", event->processor());
             _remove_processor_connections(event->processor());
+            break;
+
+        case AudioGraphNotificationEvent::Action::PROCESSOR_LAYOUT_CHANGED:
+            ELKLOG_LOG_DEBUG("Received a PROCESSOR_LAYOUT_CHANGED notification for processor {}", event->processor());
+            _reconnect_processor_connections(event->processor());
             break;
 
         case AudioGraphNotificationEvent::Action::TRACK_DELETED:
