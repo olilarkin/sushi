@@ -52,15 +52,7 @@ void ParameterManager::track_parameters(ObjectId processor_id)
     if (auto processor = _processors->processor(processor_id))
     {
         auto& param_map = _parameters[processor->id()];
-
-        for (const auto& p: processor->all_parameters())
-        {
-            auto type = p->type();
-            if (type == ParameterType::BOOL || type == ParameterType::INT || type == ParameterType::FLOAT)
-            {
-                param_map.insert({p->id(), {.value = processor->parameter_value(p->id()).second, .last_update = Time(0)}});
-            }
-        }
+        _refresh_parameter_map(processor.get(), param_map);
     }
 }
 
@@ -86,6 +78,15 @@ void ParameterManager::mark_processor_changed(ObjectId processor_id, Time timest
     else
     {
         entry->update_time = timestamp;
+    }
+}
+
+void ParameterManager::refresh_parameters(ObjectId processor_id)
+{
+    if (auto processor = _processors->processor(processor_id))
+    {
+        auto& param_map = _parameters[processor->id()];
+        _refresh_parameter_map(processor.get(), param_map);
     }
 }
 
@@ -181,6 +182,33 @@ void ParameterManager::_output_processor_notifications(dispatcher::BaseEventDisp
 bool ParameterManager::parameter_change_queue_empty() const
 {
     return _parameter_change_queue.empty();
+}
+
+void ParameterManager::_refresh_parameter_map(const Processor* processor,
+                                              std::unordered_map<ObjectId, ParameterEntry>& param_map)
+{
+    std::unordered_map<ObjectId, ParameterEntry> refreshed_map;
+
+    for (const auto* parameter : processor->all_parameters())
+    {
+        auto type = parameter->type();
+        if (type == ParameterType::BOOL || type == ParameterType::INT || type == ParameterType::FLOAT)
+        {
+            auto existing_entry = param_map.find(parameter->id());
+            if (existing_entry != param_map.end())
+            {
+                refreshed_map.insert(*existing_entry);
+            }
+            else
+            {
+                refreshed_map.insert({parameter->id(),
+                                      {.value = processor->parameter_value(parameter->id()).second,
+                                       .last_update = Time(0)}});
+            }
+        }
+    }
+
+    param_map = std::move(refreshed_map);
 }
 
 } // end namespace sushi::internal

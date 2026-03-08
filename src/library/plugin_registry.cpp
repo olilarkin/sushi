@@ -22,6 +22,9 @@
 #include "vst3x/vst3x_processor_factory.h"
 #include "clap/clap_processor_factory.h"
 #include "auv2/auv2_processor_factory.h"
+#ifdef SUSHI_BUILD_WITH_CMAJOR
+#include "cmajor/cmajor_processor_factory.h"
+#endif
 #include "lv2/lv2_processor_factory.h"
 
 namespace sushi::internal {
@@ -64,6 +67,16 @@ PluginRegistry::new_instance(const PluginInfo& plugin_info,
                 std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<auv2_wrapper::AUv2ProcessorFactory>();
                 _factories[plugin_info.type] = std::move(new_factory);
                 break;
+            }
+            case PluginType::CMAJOR:
+            {
+#ifdef SUSHI_BUILD_WITH_CMAJOR
+                std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<cmajor_plugin::CmajorProcessorFactory>();
+                _factories[plugin_info.type] = std::move(new_factory);
+                break;
+#else
+                return {ProcessorReturnCode::PLUGIN_LOAD_ERROR, nullptr};
+#endif
             }
             case PluginType::LV2:
             {
