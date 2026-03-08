@@ -38,3 +38,6 @@
 [submodule "third-party/clap"]
 	path = third-party/clap
 	url = https://github.com/free-audio/clap.git
+[submodule "third-party/cmajor"]
+	path = third-party/cmajor
+	url = https://github.com/cmajor-lang/cmajor

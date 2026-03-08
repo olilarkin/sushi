@@ -222,6 +222,7 @@ private:
     void _setup_engine_control();
 
     bool _remove_processor_connections(ObjectId processor_id);
+    void _reconnect_processor_connections(ObjectId processor_id);
 
     std::pair<OscConnection*, std::string> _create_processor_connection(const std::string& processor_name,
                                                                         ObjectId processor_id,

@@ -55,6 +55,7 @@ set(SUSHI_WITH_JACK_DEFAULT OFF)
 set(SUSHI_WITH_VST2_DEFAULT OFF)
 set(SUSHI_WITH_CLAP_DEFAULT OFF)
 set(SUSHI_WITH_AUV2_DEFAULT OFF)
+set(SUSHI_WITH_CMAJOR_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -137,6 +138,7 @@ option(SUSHI_WITH_RT_MIDI "Enable RtMidi support" ${SUSHI_WITH_RT_MIDI_DEFAULT})
 option(SUSHI_WITH_VST2 "Enable Vst 2 support" ${SUSHI_WITH_VST2_DEFAULT})
 option(SUSHI_WITH_CLAP "Enable CLAP support" ${SUSHI_WITH_CLAP_DEFAULT})
 option(SUSHI_WITH_AUV2 "Enable Audio Unit V2 support" ${SUSHI_WITH_AUV2_DEFAULT})
+option(SUSHI_WITH_CMAJOR "Enable Cmajor support" ${SUSHI_WITH_CMAJOR_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -417,6 +419,70 @@ if (${SUSHI_WITH_AUV2})
         src/library/auv2/auv2_processor_factory.mm
         src/library/auv2/auv2_editor_host.mm
         PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
+
+##################
+# Cmajor setup   #
+##################
+
+if (${SUSHI_WITH_CMAJOR})
+    message("Building with Cmajor support.")
+
+    file(GLOB CMAJOR_BOOST_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/third-party/cmajor/3rdParty/boost/*/include")
+
+    set(CMAJOR_RUNTIME_SOURCES
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/AST/cmaj_Program.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/backends/CPlusPlus/cmaj_CPlusPlusGenerator.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/backends/CPlusPlus/cmaj_CPlusPlusPerformer.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/backends/cmaj_EngineTypeList.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/diagnostics/cmaj_ErrorHandling.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/src/transformations/cmaj_Transformations.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/playback/src/cmaj_AllocationChecker.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/playback/src/cmaj_AudioFileUtils.cpp"
+        "${PROJECT_SOURCE_DIR}/third-party/cmajor/3rdParty/graphviz/cmaj_GraphViz.cpp")
+
+    add_library(sushi_cmajor_runtime OBJECT ${CMAJOR_RUNTIME_SOURCES})
+    target_compile_features(sushi_cmajor_runtime PRIVATE cxx_std_20)
+    target_include_directories(sushi_cmajor_runtime
+        PUBLIC
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/include"
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/include/choc"
+        PRIVATE
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules"
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/compiler/include"
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/modules/playback/include"
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/3rdParty"
+            "${PROJECT_SOURCE_DIR}/third-party/cmajor/3rdParty/clap/include"
+            ${CMAJOR_BOOST_INCLUDE_DIRS})
+    target_compile_definitions(sushi_cmajor_runtime
+        PRIVATE
+            $<$<CONFIG:Debug>:DEBUG=1>
+            $<$<CONFIG:Debug>:CMAJ_ENABLE_ALLOCATION_CHECKER=1>
+            CMAJ_VERSION="local"
+            CHOC_ASSERT=must_include_assertion_header_before_any_choc_headers
+            CMAJ_ENABLE_PERFORMER_LLVM=0
+            CMAJ_ENABLE_PERFORMER_WEBVIEW=0
+            CMAJ_ENABLE_PERFORMER_CPP=1
+            CMAJ_ENABLE_CODEGEN_CPP=1
+            CMAJ_ENABLE_CODEGEN_LLVM_WASM=0)
+
+    if (MSVC)
+        target_compile_options(sushi_cmajor_runtime PRIVATE /wd4244 /wd4267 /wd4996 /wd5054)
+    else()
+        target_compile_options(sushi_cmajor_runtime PRIVATE -Wno-unused-parameter -Wno-sign-compare -Wno-deprecated-declarations)
+    endif()
+
+    set(ADDITIONAL_CMAJOR_SOURCES
+        src/library/cmajor/cmajor_wrapper.h
+        src/library/cmajor/cmajor_wrapper.cpp
+        src/library/cmajor/cmajor_processor_factory.h
+        src/library/cmajor/cmajor_processor_factory.cpp)
+    set(ADDITIONAL_CMAJOR_OBJECTS $<TARGET_OBJECTS:sushi_cmajor_runtime>)
+    set(INCLUDE_DIRS ${INCLUDE_DIRS}
+                     "${PROJECT_SOURCE_DIR}/third-party/cmajor/include"
+                     "${PROJECT_SOURCE_DIR}/third-party/cmajor/include/choc")
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} sushi_cmajor_runtime)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CMAJOR)
 endif()
 
 ###############
@@ -726,7 +792,9 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_VST3_SOURCES}"
                                    "${ADDITIONAL_CLAP_SOURCES}"
                                    "${ADDITIONAL_AUV2_SOURCES}"
+                                   "${ADDITIONAL_CMAJOR_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
+                                   "${ADDITIONAL_CMAJOR_OBJECTS}"
                                    "${MIDI_SOURCES}")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)

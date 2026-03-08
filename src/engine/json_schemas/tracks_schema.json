@@ -102,6 +102,24 @@ R"(
       },
       "required": ["uid", "name", "type"]
     },
+    "cmajor_plugin" :
+    {
+      "type" : "object",
+      "properties": {
+        "path":{
+          "type": "string",
+          "minLength": 1
+        },
+        "name":{
+          "type": "string",
+          "minLength": 1
+        },
+        "type":{
+          "enum": ["cmajor"]
+        }
+      },
+      "required": ["path", "name", "type"]
+    },
     "lv2_plugin" :
     {
       "type" : "object",
@@ -216,6 +234,7 @@ R"(
               {"$ref": "#/definitions/vst3x_plugin"},
               {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/auv2_plugin"},
+              {"$ref": "#/definitions/cmajor_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }
@@ -249,6 +268,7 @@ R"(
               {"$ref": "#/definitions/vst3x_plugin"},
               {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/auv2_plugin"},
+              {"$ref": "#/definitions/cmajor_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }

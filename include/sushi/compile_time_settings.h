@@ -55,6 +55,9 @@ struct CompileTimeSettings
 #ifdef SUSHI_BUILD_WITH_CLAP
             "clap",
 #endif
+#ifdef SUSHI_BUILD_WITH_CMAJOR
+            "cmajor",
+#endif
 #ifdef SUSHI_BUILD_WITH_LV2
             "lv2",
 #endif
@@ -79,6 +82,7 @@ struct CompileTimeSettings
 #if    !defined (SUSHI_BUILD_WITH_VST2) \
     && !defined (SUSHI_BUILD_WITH_VST3) \
     && !defined (SUSHI_BUILD_WITH_CLAP) \
+    && !defined (SUSHI_BUILD_WITH_CMAJOR) \
     && !defined (SUSHI_BUILD_WITH_LV2)  \
     && !defined (SUSHI_BUILD_WITH_JACK) \
     && !defined (SUSHI_BUILD_WITH_RASPA)\

@@ -153,6 +153,8 @@ inline PluginType to_internal(control::PluginType type)
         case control::PluginType::VST3X:      return PluginType::VST3X;
         case control::PluginType::CLAP:       return PluginType::CLAP;
         case control::PluginType::LV2:        return PluginType::LV2;
+        case control::PluginType::AUV2:       return PluginType::AUV2;
+        case control::PluginType::CMAJOR:     return PluginType::CMAJOR;
         default:                              return PluginType::INTERNAL;
     }
 }
@@ -166,6 +168,8 @@ inline control::PluginType to_external(PluginType type)
         case PluginType::VST3X:      return control::PluginType::VST3X;
         case PluginType::CLAP:       return control::PluginType::CLAP;
         case PluginType::LV2:        return control::PluginType::LV2;
+        case PluginType::AUV2:       return control::PluginType::AUV2;
+        case PluginType::CMAJOR:     return control::PluginType::CMAJOR;
         default:                     return control::PluginType::INTERNAL;
     }
 }

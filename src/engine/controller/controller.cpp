@@ -193,6 +193,12 @@ void Controller::_handle_audio_graph_notifications(const AudioGraphNotificationE
             _notify_processor_listeners(event, control::ProcessorAction::DELETED);
             break;
         }
+        case AudioGraphNotificationEvent::Action::PROCESSOR_LAYOUT_CHANGED:
+        {
+            _editor_controller_impl.close_editor(static_cast<int>(event->processor()));
+            _notify_processor_listeners(event, control::ProcessorAction::UPDATED);
+            break;
+        }
         case AudioGraphNotificationEvent::Action::TRACK_CREATED:
         {
             _notify_track_listeners(event, control::TrackAction::ADDED);
