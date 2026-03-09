@@ -171,6 +171,8 @@ static NSString* plugin_type_string(PluginType type)
         case PluginType::VST3X:    return @"vst3";
         case PluginType::LV2:      return @"lv2";
         case PluginType::CLAP:     return @"clap";
+        case PluginType::AUV2:     return @"auv2";
+        case PluginType::CMAJOR:   return @"cmajor";
     }
     return @"";
 }
@@ -463,8 +465,9 @@ static NSString* plugin_type_string(PluginType type)
 
     for (const auto& track : tracks)
     {
+        const auto& track_display_name = track.label.empty() ? track.name : track.label;
         auto* trackItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"  %s (%dch)",
-                                                             track.label.c_str(), track.channels]
+                                                             track_display_name.c_str(), track.channels]
                                                      action:nil
                                               keyEquivalent:@""];
         trackItem.enabled = NO;
@@ -480,16 +483,9 @@ static NSString* plugin_type_string(PluginType type)
         {
             auto [has_ed_status, has_ed] = editor->has_editor(proc.id);
             auto [is_open_status, is_open] = editor->is_editor_open(proc.id);
+            const auto& proc_display_name = proc.label.empty() ? proc.name : proc.label;
 
-            NSString* title;
-            if (has_ed_status == ControlStatus::OK && has_ed)
-            {
-                title = [NSString stringWithFormat:@"    %s", proc.label.c_str()];
-            }
-            else
-            {
-                title = [NSString stringWithFormat:@"    %s", proc.label.c_str()];
-            }
+            NSString* title = [NSString stringWithFormat:@"    %s", proc_display_name.c_str()];
 
             auto* procItem = [[NSMenuItem alloc] initWithTitle:title
                                                         action:nil
