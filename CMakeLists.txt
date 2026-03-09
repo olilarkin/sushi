@@ -421,6 +421,21 @@ if (${SUSHI_WITH_AUV2})
         PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 endif()
 
+if (${SUSHI_WITH_VST3} OR ${SUSHI_WITH_CLAP} OR ${SUSHI_WITH_AUV2} OR ${SUSHI_WITH_CMAJOR})
+    set(ADDITIONAL_EDITOR_WINDOW_SOURCES
+        src/library/vst3x/vst3x_plugin_window.h)
+
+    if (APPLE)
+        set(ADDITIONAL_EDITOR_WINDOW_SOURCES ${ADDITIONAL_EDITOR_WINDOW_SOURCES}
+            src/library/vst3x/vst3x_plugin_window_mac.mm)
+        set_source_files_properties(src/library/vst3x/vst3x_plugin_window_mac.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    else()
+        set(ADDITIONAL_EDITOR_WINDOW_SOURCES ${ADDITIONAL_EDITOR_WINDOW_SOURCES}
+            src/library/vst3x/vst3x_plugin_window_stub.cpp)
+    endif()
+endif()
+
 ##################
 # Cmajor setup   #
 ##################
@@ -460,6 +475,7 @@ if (${SUSHI_WITH_CMAJOR})
             $<$<CONFIG:Debug>:CMAJ_ENABLE_ALLOCATION_CHECKER=1>
             CMAJ_VERSION="local"
             CHOC_ASSERT=must_include_assertion_header_before_any_choc_headers
+            CMAJ_USE_QUICKJS_WORKER=1
             CMAJ_ENABLE_PERFORMER_LLVM=0
             CMAJ_ENABLE_PERFORMER_WEBVIEW=0
             CMAJ_ENABLE_PERFORMER_CPP=1
@@ -477,12 +493,22 @@ if (${SUSHI_WITH_CMAJOR})
         src/library/cmajor/cmajor_wrapper.cpp
         src/library/cmajor/cmajor_processor_factory.h
         src/library/cmajor/cmajor_processor_factory.cpp)
+
+    if (APPLE)
+        set(ADDITIONAL_CMAJOR_SOURCES ${ADDITIONAL_CMAJOR_SOURCES}
+            src/library/cmajor/cmajor_editor_host.h
+            src/library/cmajor/cmajor_editor_host.mm)
+        set_source_files_properties(src/library/cmajor/cmajor_editor_host.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+        set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} "-framework WebKit")
+    endif()
+
     set(ADDITIONAL_CMAJOR_OBJECTS $<TARGET_OBJECTS:sushi_cmajor_runtime>)
     set(INCLUDE_DIRS ${INCLUDE_DIRS}
                      "${PROJECT_SOURCE_DIR}/third-party/cmajor/include"
                      "${PROJECT_SOURCE_DIR}/third-party/cmajor/include/choc")
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} sushi_cmajor_runtime)
-    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CMAJOR)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CMAJOR -DCMAJ_USE_QUICKJS_WORKER=1)
 endif()
 
 ###############
@@ -555,22 +581,11 @@ if (${SUSHI_WITH_VST3})
                                 src/library/vst3x/vst3x_utils.h
                                 src/library/vst3x/vst3x_processor_factory.h
                                 src/library/vst3x/vst3x_editor_host.h
-                                src/library/vst3x/vst3x_plugin_window.h
                                 src/library/vst3x/vst3x_wrapper.cpp
                                 src/library/vst3x/vst3x_host_app.cpp
                                 src/library/vst3x/vst3x_utils.cpp
                                 src/library/vst3x/vst3x_file_utils.cpp
                                 src/library/vst3x/vst3x_editor_host.cpp)
-
-    if (APPLE)
-        set(ADDITIONAL_VST3_SOURCES ${ADDITIONAL_VST3_SOURCES}
-            src/library/vst3x/vst3x_plugin_window_mac.mm)
-        set_source_files_properties(src/library/vst3x/vst3x_plugin_window_mac.mm
-            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-    else()
-        set(ADDITIONAL_VST3_SOURCES ${ADDITIONAL_VST3_SOURCES}
-            src/library/vst3x/vst3x_plugin_window_stub.cpp)
-    endif()
 
     # Linked libraries
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} vst3_host sdk)
@@ -788,6 +803,7 @@ set(SOURCE_FILES
 
 add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_APPLE_COREAUDIO_SOURCES}"
+                                   "${ADDITIONAL_EDITOR_WINDOW_SOURCES}"
                                    "${ADDITIONAL_VST2_SOURCES}"
                                    "${ADDITIONAL_VST3_SOURCES}"
                                    "${ADDITIONAL_CLAP_SOURCES}"

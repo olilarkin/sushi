@@ -34,8 +34,12 @@
 #include "cmajor/API/cmaj_Engine.h"
 #include "cmajor/API/cmaj_Program.h"
 #include "cmajor/helpers/cmaj_AudioMIDIPerformer.h"
+#include "cmajor/helpers/cmaj_Patch.h"
+#include "cmajor/helpers/cmaj_PluginHelpers.h"
 #include "choc/audio/choc_MIDI.h"
+#include "choc/audio/choc_AudioMIDIBlockDispatcher.h"
 #include "choc/audio/choc_SampleBuffers.h"
+#include "choc/gui/choc_MessageLoop.h"
 #include "choc/text/choc_Files.h"
 #include "choc/text/choc_JSON.h"
 
@@ -69,11 +73,54 @@ bool is_audio_endpoint(const cmaj::EndpointDetails& endpoint)
     return endpoint.getNumAudioChannels() > 0;
 }
 
+bool is_patch_source_path(const std::string& source_path)
+{
+    if (source_path.empty())
+    {
+        return false;
+    }
+
+    return std::filesystem::path(source_path).extension() == ".cmajorpatch";
+}
+
 std::string endpoint_signature(const cmaj::EndpointDetails& endpoint)
 {
     return endpoint.endpointID.toString() + "|" +
            (endpoint.isEvent() ? "event" : "value") + "|" +
            endpoint.dataTypes.front().getDescription();
+}
+
+choc::value::Type patch_parameter_value_type(const cmaj::PatchParameterProperties& properties)
+{
+    if (properties.boolean)
+    {
+        return choc::value::Type::createBool();
+    }
+
+    if (properties.discrete || properties.shouldRound)
+    {
+        return choc::value::Type::createInt32();
+    }
+
+    return choc::value::Type::createFloat32();
+}
+
+std::string patch_parameter_signature(const cmaj::PatchParameterProperties& properties,
+                                      const choc::value::Type& value_type)
+{
+    auto value_kind = std::string("float");
+    if (value_type.isBool())
+    {
+        value_kind = "bool";
+    }
+    else if (value_type.isInt())
+    {
+        value_kind = "int";
+    }
+
+    return properties.endpointID + "|" +
+           (properties.isEvent ? "event" : "value") + "|" +
+           value_kind;
 }
 
 std::string make_unique_name(const std::string& endpoint_id, std::unordered_set<std::string>& used_names)
@@ -130,6 +177,23 @@ float domain_from_normalized(const cmaj::PatchParameterProperties& properties,
     }
 
     return properties.snapAndConstrainValue(domain_value);
+}
+
+float normalized_from_domain(const cmaj::PatchParameterProperties& properties,
+                             const choc::value::Type& value_type,
+                             float domain_value)
+{
+    if (value_type.isBool())
+    {
+        return domain_value >= 0.5f ? 1.0f : 0.0f;
+    }
+
+    if (value_type.isInt())
+    {
+        return properties.convertTo0to1(std::round(properties.snapAndConstrainValue(domain_value)));
+    }
+
+    return properties.convertTo0to1(properties.snapAndConstrainValue(domain_value));
 }
 
 std::string formatted_parameter_value(const cmaj::PatchParameterProperties& properties,
@@ -242,10 +306,28 @@ std::string build_log_string(const cmaj::Engine& engine, const cmaj::DiagnosticM
     return build_log.empty() ? message_log : build_log;
 }
 
+int count_audio_channels(const cmaj::EndpointDetailsList& endpoints)
+{
+    int total_channels = 0;
+
+    for (const auto& endpoint : endpoints)
+    {
+        total_channels += static_cast<int>(endpoint.getNumAudioChannels());
+    }
+
+    return total_channels;
+}
+
 } // namespace
 
 struct CmajorWrapper::Runtime
 {
+    enum class Kind
+    {
+        PROGRAM,
+        PATCH
+    };
+
     struct EndpointBinding
     {
         cmaj::EndpointHandle handle = INVALID_ENDPOINT_HANDLE;
@@ -259,13 +341,15 @@ struct CmajorWrapper::Runtime
                                 cmaj::PatchParameterProperties properties_,
                                 choc::value::Type value_type_,
                                 cmaj::EndpointHandle handle_,
-                                bool is_event_)
+                                bool is_event_,
+                                std::shared_ptr<cmaj::PatchParameter> patch_parameter_ = {})
             : endpoint_id(std::move(endpoint_id_)),
               signature(std::move(signature_)),
               properties(std::move(properties_)),
               value_type(std::move(value_type_)),
               handle(handle_),
-              is_event(is_event_)
+              is_event(is_event_),
+              patch_parameter(std::move(patch_parameter_))
         {
         }
 
@@ -275,6 +359,7 @@ struct CmajorWrapper::Runtime
         choc::value::Type value_type;
         cmaj::EndpointHandle handle = INVALID_ENDPOINT_HANDLE;
         bool is_event = false;
+        std::shared_ptr<cmaj::PatchParameter> patch_parameter;
     };
 
     struct InputParameterBinding
@@ -283,10 +368,13 @@ struct CmajorWrapper::Runtime
         choc::value::Type value_type;
         uint32_t ramp_frames = 0;
         bool is_event = false;
+        std::shared_ptr<cmaj::PatchParameter> patch_parameter;
     };
 
+    Kind kind = Kind::PROGRAM;
     cmaj::Engine engine;
     std::unique_ptr<cmaj::AudioMIDIPerformer> performer;
+    std::shared_ptr<cmaj::Patch> patch;
     cmaj::EndpointDetailsList input_endpoints;
     cmaj::EndpointDetailsList output_endpoints;
     std::vector<PendingParameterBinding> pending_parameter_bindings;
@@ -298,6 +386,8 @@ struct CmajorWrapper::Runtime
     cmaj::TimelineEventGenerator timeline_events;
     int max_input_channels = 0;
     int max_output_channels = 0;
+    std::string build_log;
+    cmaj::PatchManifest::View editor_view;
 };
 
 CmajorWrapper::CmajorWrapper(HostControl host_control, PluginInfo plugin_info)
@@ -411,7 +501,9 @@ void CmajorWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSampl
         return;
     }
 
-    if (!runtime || !runtime->performer)
+    if (!runtime ||
+        (runtime->kind == Runtime::Kind::PROGRAM && !runtime->performer) ||
+        (runtime->kind == Runtime::Kind::PATCH && !runtime->patch))
     {
         out_buffer.clear();
         _pending_midi_count = 0;
@@ -419,7 +511,7 @@ void CmajorWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSampl
     }
 
     const auto* transport = _host_control.transport();
-    if (transport)
+    if (transport && runtime->kind == Runtime::Kind::PROGRAM)
     {
         if (is_valid_handle(runtime->time_signature_input.handle))
         {
@@ -514,22 +606,68 @@ void CmajorWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSampl
                                                             static_cast<uint32_t>(_current_output_channels),
                                                             static_cast<uint32_t>(AUDIO_CHUNK_SIZE));
 
-    runtime->performer->processWithTimeStampedMIDI(input_view,
-                                                   output_view,
-                                                   midi_messages.data(),
-                                                   midi_times.data(),
-                                                   static_cast<uint32_t>(_pending_midi_count),
-                                                   [this](uint32_t frame, const choc::midi::ShortMessage& message)
-                                                   {
-                                                       MidiDataByte midi_data {
-                                                           message.data()[0],
-                                                           message.data()[1],
-                                                           message.data()[2],
-                                                           0
-                                                       };
-                                                       this->output_midi_event_as_internal(midi_data, static_cast<int>(frame));
-                                                   },
-                                                   true);
+    if (runtime->kind == Runtime::Kind::PATCH)
+    {
+        auto midi_output = [this](uint32_t frame, choc::midi::MessageView message)
+        {
+            if (message.size() == 0)
+            {
+                return;
+            }
+
+            MidiDataByte midi_data {
+                static_cast<uint8_t>(message.size() > 0 ? message.data()[0] : 0),
+                static_cast<uint8_t>(message.size() > 1 ? message.data()[1] : 0),
+                static_cast<uint8_t>(message.size() > 2 ? message.data()[2] : 0),
+                0
+            };
+            this->output_midi_event_as_internal(midi_data, static_cast<int>(frame));
+        };
+
+        auto midi_span = choc::span<choc::audio::AudioMIDIBlockDispatcher::MIDIMessage>(midi_messages.data(),
+                                                                                         midi_messages.data() + _pending_midi_count);
+        auto block = choc::audio::AudioMIDIBlockDispatcher::Block { input_view, output_view, midi_span, midi_output };
+
+        runtime->patch->beginChunkedProcess();
+
+        if (transport && runtime->patch->wantsTimecodeEvents())
+        {
+            runtime->patch->sendTimeSig(transport->time_signature().numerator,
+                                        transport->time_signature().denominator,
+                                        0);
+            runtime->patch->sendBPM(transport->current_tempo(), 0);
+            runtime->patch->sendTransportState(transport->playing_mode() == PlayingMode::RECORDING,
+                                               transport->playing(),
+                                               false,
+                                               0);
+            runtime->patch->sendPosition(transport->current_samples(),
+                                         transport->current_beats(),
+                                         transport->current_bar_start_beats(),
+                                         0);
+        }
+
+        runtime->patch->processChunk(block, true);
+        runtime->patch->endChunkedProcess();
+    }
+    else
+    {
+        runtime->performer->processWithTimeStampedMIDI(input_view,
+                                                       output_view,
+                                                       midi_messages.data(),
+                                                       midi_times.data(),
+                                                       static_cast<uint32_t>(_pending_midi_count),
+                                                       [this](uint32_t frame, const choc::midi::ShortMessage& message)
+                                                       {
+                                                           MidiDataByte midi_data {
+                                                               message.data()[0],
+                                                               message.data()[1],
+                                                               message.data()[2],
+                                                               0
+                                                           };
+                                                           this->output_midi_event_as_internal(midi_data, static_cast<int>(frame));
+                                                       },
+                                                       true);
+    }
 
     _pending_midi_count = 0;
 }
@@ -811,6 +949,38 @@ PluginInfo CmajorWrapper::info() const
     return info;
 }
 
+bool CmajorWrapper::has_editor() const
+{
+#ifdef __APPLE__
+    return current_editor_session().has_value();
+#else
+    return false;
+#endif
+}
+
+std::optional<CmajorWrapper::EditorSession> CmajorWrapper::current_editor_session() const
+{
+    return _editor_session_from_runtime(_load_runtime());
+}
+
+void CmajorWrapper::set_editor_session_callback(EditorSessionCallback callback)
+{
+    std::optional<EditorSession> session;
+    auto current_callback = EditorSessionCallback {};
+
+    {
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        _editor_session_callback = std::move(callback);
+        session = _editor_session_from_runtime(_load_runtime());
+        current_callback = _editor_session_callback;
+    }
+
+    if (current_callback)
+    {
+        current_callback(std::move(session));
+    }
+}
+
 void CmajorWrapper::_register_properties()
 {
     auto add_property = [this](ObjectId id, const std::string& name, const std::string& label)
@@ -885,6 +1055,7 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
         }
 
         auto had_layout = false;
+        auto editor_callback = EditorSessionCallback {};
         {
             std::scoped_lock<std::mutex> lock(_state_lock);
             had_layout = !_active_parameter_ids.empty() || static_cast<bool>(_load_runtime());
@@ -897,6 +1068,12 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
             _current_input_channels = std::min(_requested_input_channels, _max_input_channels);
             _current_output_channels = std::min(_requested_output_channels, _max_output_channels);
             _set_compile_feedback_locked(CompileStatus::EMPTY, "", "", true);
+            editor_callback = _editor_session_callback;
+        }
+
+        if (editor_callback)
+        {
+            editor_callback(std::nullopt);
         }
 
         if (had_layout)
@@ -910,8 +1087,19 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
         return ProcessorReturnCode::OK;
     }
 
+    if (source_code.empty() && is_patch_source_path(source_path))
+    {
+        return _compile_patch_source(source_path);
+    }
+
+    return _compile_program_source(source_path, source_code);
+}
+
+ProcessorReturnCode CmajorWrapper::_compile_program_source(const std::string& source_path,
+                                                           const std::string& source_code)
+{
     auto loaded_source = source_code;
-    std::string compile_filename = source_path.empty() ? "inline.cmajor" : source_path;
+    auto compile_filename = source_path.empty() ? std::string("inline.cmajor") : source_path;
 
     if (loaded_source.empty())
     {
@@ -964,25 +1152,12 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
     }
 
     auto runtime = std::make_shared<Runtime>();
+    runtime->kind = Runtime::Kind::PROGRAM;
     runtime->engine = engine;
     runtime->input_endpoints = engine.getInputEndpoints();
     runtime->output_endpoints = engine.getOutputEndpoints();
-
-    for (const auto& endpoint : runtime->input_endpoints)
-    {
-        if (is_audio_endpoint(endpoint))
-        {
-            runtime->max_input_channels += static_cast<int>(endpoint.getNumAudioChannels());
-        }
-    }
-
-    for (const auto& endpoint : runtime->output_endpoints)
-    {
-        if (is_audio_endpoint(endpoint))
-        {
-            runtime->max_output_channels += static_cast<int>(endpoint.getNumAudioChannels());
-        }
-    }
+    runtime->max_input_channels = count_audio_channels(runtime->input_endpoints);
+    runtime->max_output_channels = count_audio_channels(runtime->output_endpoints);
 
     auto connected_input_channels = std::min(_requested_input_channels, runtime->max_input_channels);
     auto connected_output_channels = std::min(_requested_output_channels, runtime->max_output_channels);
@@ -1096,6 +1271,8 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
         return ProcessorReturnCode::PLUGIN_INIT_ERROR;
     }
 
+    runtime->build_log = build_log_string(runtime->engine, messages);
+
     {
         std::scoped_lock<std::mutex> lock(_state_lock);
         _source_path = source_path;
@@ -1111,7 +1288,144 @@ ProcessorReturnCode CmajorWrapper::_compile_source(const std::string& source_pat
     {
         std::scoped_lock<std::mutex> lock(_state_lock);
         _set_compile_feedback_locked(CompileStatus::READY,
-                                     build_log_string(runtime->engine, messages),
+                                     runtime->build_log,
+                                     std::move(program_details_json),
+                                     true);
+    }
+
+    return ProcessorReturnCode::OK;
+}
+
+ProcessorReturnCode CmajorWrapper::_compile_patch_source(const std::string& source_path)
+{
+    if (source_path.empty())
+    {
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        _set_compile_feedback_locked(CompileStatus::ERROR, "No Cmajor patch path supplied", "", true);
+        return ProcessorReturnCode::PLUGIN_LOAD_ERROR;
+    }
+
+    choc::messageloop::initialise();
+
+    std::unordered_map<std::string, float> initial_parameter_values;
+    {
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        for (auto parameter_id : _active_parameter_ids)
+        {
+            auto it = _parameters_by_id.find(parameter_id);
+            if (it != _parameters_by_id.end())
+            {
+                initial_parameter_values[it->second->endpoint_id] = it->second->domain_value.load();
+            }
+        }
+    }
+
+    auto runtime = std::make_shared<Runtime>();
+    runtime->kind = Runtime::Kind::PATCH;
+    runtime->patch = std::make_shared<cmaj::Patch>();
+
+    auto weak_runtime = std::weak_ptr<Runtime>(runtime);
+    cmaj::plugin::Environment environment {
+        cmaj::plugin::Environment::EngineType::JIT,
+        [this]() {
+            auto engine_options = choc::value::createObject({});
+            auto engine = cmaj::Engine::create("cpp", &engine_options);
+
+            cmaj::BuildSettings build_settings;
+            build_settings.setFrequency(_sample_rate)
+                          .setMaxFrequency(_sample_rate)
+                          .setMaxBlockSize(static_cast<uint32_t>(AUDIO_CHUNK_SIZE))
+                          .setEventBufferSize(256)
+                          .setSessionID(static_cast<int32_t>(this->id()))
+                          .setOptimisationLevel(2);
+            engine.setBuildSettings(build_settings);
+            return engine;
+        },
+        {}
+    };
+
+    environment.initialisePatch(*runtime->patch);
+    runtime->patch->setHostDescription("Sushi");
+    runtime->patch->setAutoRebuildOnFileChange(false);
+    runtime->patch->statusChanged = [weak_runtime](const cmaj::Patch::Status& status)
+    {
+        if (auto runtime_ptr = weak_runtime.lock())
+        {
+            runtime_ptr->build_log = !status.statusMessage.empty() ? status.statusMessage
+                                                                   : status.messageList.toString();
+        }
+    };
+
+    runtime->patch->setPlaybackParams({
+        _sample_rate,
+        static_cast<uint32_t>(AUDIO_CHUNK_SIZE),
+        static_cast<choc::buffer::ChannelCount>(std::max(_requested_input_channels, 0)),
+        static_cast<choc::buffer::ChannelCount>(std::max(_requested_output_channels, 0))
+    }, false);
+
+    cmaj::Patch::LoadParams load_params;
+    load_params.manifest = environment.makePatchManifest(_resolve_source_path(source_path));
+    load_params.parameterValues = std::move(initial_parameter_values);
+
+    if (!runtime->patch->loadPatch(load_params, true))
+    {
+        auto build_log = runtime->build_log;
+        if (build_log.empty())
+        {
+            build_log = runtime->patch->getLastBuildLog();
+        }
+        if (build_log.empty())
+        {
+            build_log = "Failed to load Cmajor patch";
+        }
+
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        _set_compile_feedback_locked(CompileStatus::ERROR, build_log, "", true);
+        return ProcessorReturnCode::PLUGIN_LOAD_ERROR;
+    }
+
+    runtime->input_endpoints = runtime->patch->getInputEndpoints();
+    runtime->output_endpoints = runtime->patch->getOutputEndpoints();
+    runtime->max_input_channels = count_audio_channels(runtime->input_endpoints);
+    runtime->max_output_channels = count_audio_channels(runtime->output_endpoints);
+    runtime->build_log = runtime->patch->getLastBuildLog();
+
+    for (const auto& parameter : runtime->patch->getParameterList())
+    {
+        auto value_type = patch_parameter_value_type(parameter->properties);
+        runtime->pending_parameter_bindings.emplace_back(parameter->properties.endpointID,
+                                                         patch_parameter_signature(parameter->properties, value_type),
+                                                         parameter->properties,
+                                                         value_type,
+                                                         INVALID_ENDPOINT_HANDLE,
+                                                         parameter->properties.isEvent,
+                                                         parameter);
+    }
+
+    if (auto manifest = runtime->patch->getManifest())
+    {
+        if (auto* view = manifest->findDefaultView())
+        {
+            runtime->editor_view = *view;
+        }
+    }
+
+    {
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        _source_path = source_path;
+        _source_code.clear();
+        _set_property_value_locked(SOURCE_PATH_PROPERTY_ID, _source_path, true);
+        _set_property_value_locked(SOURCE_CODE_PROPERTY_ID, "", true);
+    }
+
+    _install_runtime(runtime);
+
+    auto program_details_json = _create_program_details_json(*runtime);
+
+    {
+        std::scoped_lock<std::mutex> lock(_state_lock);
+        _set_compile_feedback_locked(CompileStatus::READY,
+                                     runtime->build_log,
                                      std::move(program_details_json),
                                      true);
     }
@@ -1126,15 +1440,9 @@ std::pair<ProcessorReturnCode, std::string> CmajorWrapper::_load_source_from_pat
         return {ProcessorReturnCode::PARAMETER_ERROR, "No Cmajor source path supplied"};
     }
 
-    auto resolved_path = std::filesystem::path(source_path);
-    if (resolved_path.is_relative())
-    {
-        resolved_path = _host_control.to_absolute_path(source_path);
-    }
-
     try
     {
-        return {ProcessorReturnCode::OK, choc::file::loadFileAsString(resolved_path.string())};
+        return {ProcessorReturnCode::OK, choc::file::loadFileAsString(_resolve_source_path(source_path))};
     }
     catch (const std::exception& e)
     {
@@ -1142,9 +1450,22 @@ std::pair<ProcessorReturnCode, std::string> CmajorWrapper::_load_source_from_pat
     }
 }
 
+std::string CmajorWrapper::_resolve_source_path(const std::string& source_path)
+{
+    auto resolved_path = std::filesystem::path(source_path);
+    if (resolved_path.is_relative())
+    {
+        resolved_path = _host_control.to_absolute_path(source_path);
+    }
+
+    return resolved_path.string();
+}
+
 void CmajorWrapper::_install_runtime(std::shared_ptr<Runtime> runtime)
 {
     auto notify_layout_change = false;
+    auto editor_session = std::optional<EditorSession> {};
+    auto editor_callback = EditorSessionCallback {};
 
     {
         struct PreviousParameter
@@ -1226,8 +1547,61 @@ void CmajorWrapper::_install_runtime(std::shared_ptr<Runtime> runtime)
                     pending_binding.handle,
                     pending_binding.value_type,
                     pending_binding.properties.rampFrames,
-                    pending_binding.is_event
+                    pending_binding.is_event,
+                    pending_binding.patch_parameter
                 };
+
+                if (pending_binding.patch_parameter)
+                {
+                    auto weak_runtime = std::weak_ptr<Runtime>(runtime);
+                    auto properties = parameter_state->properties;
+                    auto value_type = parameter_state->value_type;
+
+                    pending_binding.patch_parameter->valueChanged = [this,
+                                                                    weak_runtime,
+                                                                    parameter_id,
+                                                                    properties,
+                                                                    value_type](float new_value)
+                    {
+                        auto active_runtime = weak_runtime.lock();
+                        if (!active_runtime || _load_runtime().get() != active_runtime.get())
+                        {
+                            return;
+                        }
+
+                        auto domain_value = domain_from_normalized(properties,
+                                                                   value_type,
+                                                                   normalized_from_domain(properties, value_type, new_value));
+                        auto normalized_value = normalized_from_domain(properties, value_type, domain_value);
+
+                        {
+                            std::scoped_lock<std::mutex> lock(_state_lock);
+                            auto it = _parameters_by_id.find(parameter_id);
+                            if (it == _parameters_by_id.end())
+                            {
+                                return;
+                            }
+
+                            if (it->second->normalized_value.load() == normalized_value &&
+                                it->second->domain_value.load() == domain_value)
+                            {
+                                return;
+                            }
+
+                            it->second->normalized_value.store(normalized_value);
+                            it->second->domain_value.store(domain_value);
+                        }
+
+                        _host_control.post_event(std::make_unique<ParameterChangeNotificationEvent>(this->id(),
+                                                                                                    parameter_id,
+                                                                                                    normalized_value,
+                                                                                                    domain_value,
+                                                                                                    formatted_parameter_value(properties,
+                                                                                                                              value_type,
+                                                                                                                              domain_value),
+                                                                                                    IMMEDIATE_PROCESS));
+                    };
+                }
 
                 _parameter_ids_by_name.emplace(descriptor_name, parameter_id);
                 _active_parameter_ids.push_back(parameter_id);
@@ -1247,11 +1621,18 @@ void CmajorWrapper::_install_runtime(std::shared_ptr<Runtime> runtime)
         _current_input_channels = std::min(_requested_input_channels, _max_input_channels);
         _current_output_channels = std::min(_requested_output_channels, _max_output_channels);
         _store_runtime(runtime);
+        editor_session = _editor_session_from_runtime(runtime);
+        editor_callback = _editor_session_callback;
     }
 
     if (runtime)
     {
         _apply_all_parameter_values_to_runtime(*runtime);
+    }
+
+    if (editor_callback)
+    {
+        editor_callback(std::move(editor_session));
     }
 
     if (notify_layout_change)
@@ -1268,7 +1649,7 @@ void CmajorWrapper::_apply_parameter_value_to_runtime(const Runtime& runtime,
                                                       float normalized_value) const
 {
     auto binding_it = runtime.input_parameter_bindings.find(parameter_id);
-    if (binding_it == runtime.input_parameter_bindings.end() || !runtime.performer)
+    if (binding_it == runtime.input_parameter_bindings.end())
     {
         return;
     }
@@ -1291,6 +1672,20 @@ void CmajorWrapper::_apply_parameter_value_to_runtime(const Runtime& runtime,
     auto domain_value = domain_from_normalized(parameter->properties,
                                                parameter->value_type,
                                                normalized_value);
+
+    if (binding_it->second.patch_parameter)
+    {
+        binding_it->second.patch_parameter->setValue(domain_value,
+                                                     false,
+                                                     static_cast<int32_t>(binding_it->second.ramp_frames),
+                                                     0);
+        return;
+    }
+
+    if (!runtime.performer)
+    {
+        return;
+    }
 
     if (binding_it->second.value_type.isBool())
     {
@@ -1390,6 +1785,42 @@ void CmajorWrapper::_restore_named_state_from_binary(const std::vector<std::byte
     try
     {
         auto root = choc::json::parse(json);
+        if (auto runtime = _load_runtime())
+        {
+            if (runtime->kind == Runtime::Kind::PATCH)
+            {
+                auto patch_state = root["patchState"];
+                if (patch_state.isObject())
+                {
+                    runtime->patch->setFullStoredState(patch_state);
+
+                    std::scoped_lock<std::mutex> lock(_state_lock);
+                    for (const auto& parameter : runtime->patch->getParameterList())
+                    {
+                        for (auto parameter_id : _active_parameter_ids)
+                        {
+                            auto it = _parameters_by_id.find(parameter_id);
+                            if (it != _parameters_by_id.end() &&
+                                it->second->endpoint_id == parameter->properties.endpointID)
+                            {
+                                auto normalized_value = normalized_from_domain(it->second->properties,
+                                                                               it->second->value_type,
+                                                                               parameter->currentValue);
+                                auto domain_value = domain_from_normalized(it->second->properties,
+                                                                           it->second->value_type,
+                                                                           normalized_value);
+                                it->second->normalized_value.store(normalized_value);
+                                it->second->domain_value.store(domain_value);
+                                break;
+                            }
+                        }
+                    }
+
+                    return;
+                }
+            }
+        }
+
         auto params = root["parameters"];
 
         if (!params.isArray())
@@ -1445,7 +1876,8 @@ std::string CmajorWrapper::_compile_status_to_string(CompileStatus status) const
 
 std::string CmajorWrapper::_create_program_details_json(const Runtime& runtime) const
 {
-    auto value = runtime.engine.getProgramDetails();
+    auto value = runtime.kind == Runtime::Kind::PATCH ? runtime.patch->getProgramDetails()
+                                                      : runtime.engine.getProgramDetails();
     if (!value.isObject())
     {
         value = choc::value::createObject({});
@@ -1480,6 +1912,21 @@ std::string CmajorWrapper::_create_program_details_json(const Runtime& runtime) 
 
 std::vector<std::byte> CmajorWrapper::_create_named_state_binary() const
 {
+    if (auto runtime = _load_runtime())
+    {
+        if (runtime->kind == Runtime::Kind::PATCH && runtime->patch)
+        {
+            auto state = choc::json::create("patchState", runtime->patch->getFullStoredState());
+            auto json = choc::json::toString(state, false);
+            std::vector<std::byte> binary_data(json.size());
+            if (!json.empty())
+            {
+                std::memcpy(binary_data.data(), json.data(), json.size());
+            }
+            return binary_data;
+        }
+    }
+
     auto parameters = choc::value::createEmptyArray();
 
     {
@@ -1506,6 +1953,26 @@ std::vector<std::byte> CmajorWrapper::_create_named_state_binary() const
         std::memcpy(binary_data.data(), json.data(), json.size());
     }
     return binary_data;
+}
+
+std::optional<CmajorWrapper::EditorSession> CmajorWrapper::_editor_session_from_runtime(const std::shared_ptr<Runtime>& runtime) const
+{
+#ifndef __APPLE__
+    (void) runtime;
+    return std::nullopt;
+#else
+    if (!runtime || runtime->kind != Runtime::Kind::PATCH || !runtime->patch)
+    {
+        return std::nullopt;
+    }
+
+    if (runtime->editor_view.getSource().empty())
+    {
+        return std::nullopt;
+    }
+
+    return EditorSession { runtime->patch, runtime->editor_view };
+#endif
 }
 
 std::shared_ptr<CmajorWrapper::Runtime> CmajorWrapper::_load_runtime() const
