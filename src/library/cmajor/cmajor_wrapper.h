@@ -18,6 +18,7 @@
 
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -30,6 +31,10 @@
 #include "choc/containers/choc_Value.h"
 
 #include "library/processor.h"
+
+namespace cmaj {
+struct Patch;
+}
 
 namespace sushi::internal::cmajor_plugin {
 
@@ -60,6 +65,18 @@ public:
     ProcessorReturnCode set_state(ProcessorState* state, bool realtime_running) override;
     ProcessorState save_state() const override;
     PluginInfo info() const override;
+    bool has_editor() const override;
+
+    struct EditorSession
+    {
+        std::shared_ptr<cmaj::Patch> patch;
+        cmaj::PatchManifest::View view;
+    };
+
+    using EditorSessionCallback = std::function<void(std::optional<EditorSession>)>;
+
+    std::optional<EditorSession> current_editor_session() const;
+    void set_editor_session_callback(EditorSessionCallback callback);
 
 private:
     enum class CompileStatus
@@ -111,8 +128,12 @@ private:
     ProcessorReturnCode _compile_source(const std::string& source_path,
                                         const std::string& source_code,
                                         bool fail_if_empty);
+    ProcessorReturnCode _compile_program_source(const std::string& source_path,
+                                                const std::string& source_code);
+    ProcessorReturnCode _compile_patch_source(const std::string& source_path);
 
     std::pair<ProcessorReturnCode, std::string> _load_source_from_path(const std::string& source_path);
+    std::string _resolve_source_path(const std::string& source_path);
 
     void _install_runtime(std::shared_ptr<Runtime> runtime);
     void _apply_parameter_value_to_runtime(const Runtime& runtime, ObjectId parameter_id, float normalized_value) const;
@@ -124,6 +145,7 @@ private:
     std::string _compile_status_to_string(CompileStatus status) const;
     std::string _create_program_details_json(const Runtime& runtime) const;
     std::vector<std::byte> _create_named_state_binary() const;
+    std::optional<EditorSession> _editor_session_from_runtime(const std::shared_ptr<Runtime>& runtime) const;
 
     mutable std::mutex _state_lock;
     std::mutex _compile_lock;
@@ -138,6 +160,7 @@ private:
     std::string _source_path;
     std::string _source_code;
     PluginInfo _plugin_info;
+    EditorSessionCallback _editor_session_callback;
 
     int _requested_input_channels {0};
     int _requested_output_channels {0};
