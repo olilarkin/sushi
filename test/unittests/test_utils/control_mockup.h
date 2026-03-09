@@ -17,8 +17,8 @@ const ParameterInfo parameter_3{2, ParameterType::BOOL, "param 3", "param 3", "u
 const PropertyInfo property_1{1, "property_1", "Property 1"};
 const std::vector<ParameterInfo> parameters{parameter_1, parameter_2, parameter_3};
 
-const ProcessorInfo processor_1{0, "proc 1", "proc 1", 0 , 0};
-const ProcessorInfo processor_2{1, "proc 2", "proc 2", 1 , 1};
+const ProcessorInfo processor_1{0, "proc 1", "proc 1", 0 , 0, PluginType::INTERNAL};
+const ProcessorInfo processor_2{1, "proc 2", "proc 2", 1 , 1, PluginType::VST3X};
 const std::vector<ProcessorInfo> processors{processor_1, processor_2};
 
 const TrackInfo track1{0, "track 1", "track 1", 0, 0, TrackType::REGULAR, {}};

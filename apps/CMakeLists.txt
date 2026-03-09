@@ -66,6 +66,14 @@ if(APPLE AND (SUSHI_WITH_VST3 OR SUSHI_WITH_CLAP OR SUSHI_WITH_AUV2 OR SUSHI_WIT
     add_executable(sushi-gui MACOSX_BUNDLE main_cocoa.mm sushi_status_bar.mm)
     target_compile_options(sushi-gui PRIVATE ${SUSHI_COMPILE_OPTIONS} -fobjc-arc)
     target_link_libraries(sushi-gui PRIVATE sushi_library ${APP_LINK_LIBRARIES} "-framework Cocoa")
+    set_target_properties(sushi-gui PROPERTIES
+            MACOSX_BUNDLE_BUNDLE_NAME "Sushi GUI"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.elkaudio.sushi.gui"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_INFO_STRING "Sushi GUI ${PROJECT_VERSION}"
+            MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
+    )
     install(TARGETS sushi-gui BUNDLE DESTINATION Applications)
 endif()
 foreach(ITEM ${DOC_FILES_INSTALL})

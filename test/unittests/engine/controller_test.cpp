@@ -157,18 +157,21 @@ TEST_F(ControllerTest, TestTrackControls)
     EXPECT_EQ("Passthrough", processors[0].label);
     EXPECT_EQ(0, processors[0].program_count);
     EXPECT_EQ(0, processors[0].parameter_count);
+    EXPECT_EQ(control::PluginType::INTERNAL, processors[0].type);
     EXPECT_EQ(info.processors[0], processors[0].id);
 
     EXPECT_EQ("gain_0_l", processors[1].name);
     EXPECT_EQ("Gain", processors[1].label);
     EXPECT_EQ(0, processors[1].program_count);
     EXPECT_EQ(1, processors[1].parameter_count);
+    EXPECT_EQ(control::PluginType::INTERNAL, processors[1].type);
     EXPECT_EQ(info.processors[1], processors[1].id);
 
     EXPECT_EQ("equalizer_0_l", processors[2].name);
     EXPECT_EQ("Equalizer", processors[2].label);
     EXPECT_EQ(0, processors[2].program_count);
     EXPECT_EQ(3, processors[2].parameter_count);
+    EXPECT_EQ(control::PluginType::INTERNAL, processors[2].type);
     EXPECT_EQ(info.processors[2], processors[2].id);
 
     auto parameter_controller = _module_under_test->parameter_controller();
@@ -213,6 +216,7 @@ TEST_F(ControllerTest, TestProcessorControls)
     EXPECT_EQ(info.label, "Equalizer");
     EXPECT_EQ(info.program_count, 0);
     EXPECT_EQ(info.parameter_count, 3);
+    EXPECT_EQ(info.type, control::PluginType::INTERNAL);
 
     auto [bypass_status, bypassed] = graph_controller->get_processor_bypass_state(id);
     ASSERT_EQ(control::ControlStatus::OK, bypass_status);

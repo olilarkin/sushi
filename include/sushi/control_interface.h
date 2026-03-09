@@ -126,6 +126,7 @@ struct ProcessorInfo
     std::string name;
     int         parameter_count;
     int         program_count;
+    PluginType  type;
 };
 
 struct ProgramInfo
