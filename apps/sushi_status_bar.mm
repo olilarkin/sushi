@@ -162,19 +162,31 @@ static NSString* sync_mode_string(SyncMode mode)
     return @"Internal";
 }
 
-static NSString* plugin_type_string(PluginType type)
+static NSString* plugin_type_badge_string(PluginType type)
 {
     switch (type)
     {
-        case PluginType::INTERNAL: return @"internal";
-        case PluginType::VST2X:    return @"vst2";
-        case PluginType::VST3X:    return @"vst3";
-        case PluginType::LV2:      return @"lv2";
-        case PluginType::CLAP:     return @"clap";
-        case PluginType::AUV2:     return @"auv2";
-        case PluginType::CMAJOR:   return @"cmajor";
+        case PluginType::INTERNAL: return @"INT";
+        case PluginType::VST2X:    return @"VST2";
+        case PluginType::VST3X:    return @"VST3";
+        case PluginType::LV2:      return @"LV2";
+        case PluginType::CLAP:     return @"CLAP";
+        case PluginType::AUV2:     return @"AUV2";
+        case PluginType::CMAJOR:   return @"CMAJ";
     }
-    return @"";
+    return nil;
+}
+
+static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
+{
+    if (@available(macOS 14.0, *))
+    {
+        NSString* badge = plugin_type_badge_string(type);
+        if (badge.length > 0)
+        {
+            item.badge = [[NSMenuItemBadge alloc] initWithString:badge];
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +502,7 @@ static NSString* plugin_type_string(PluginType type)
             auto* procItem = [[NSMenuItem alloc] initWithTitle:title
                                                         action:nil
                                                  keyEquivalent:@""];
+            apply_plugin_type_badge(procItem, proc.type);
 
             if (has_ed_status == ControlStatus::OK && has_ed)
             {

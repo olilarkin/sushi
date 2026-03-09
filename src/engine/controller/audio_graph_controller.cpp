@@ -34,7 +34,8 @@ inline control::ProcessorInfo to_external(const Processor* proc)
                               .label = proc->label(),
                               .name = proc->name(),
                               .parameter_count = proc->parameter_count(),
-                              .program_count = proc->supports_programs()? proc->program_count() : 0};
+                              .program_count = proc->supports_programs()? proc->program_count() : 0,
+                              .type = to_external(proc->info().type)};
 }
 
 inline control::TrackInfo to_external(const Track* track, std::vector<int> proc_ids)
@@ -445,4 +446,3 @@ std::vector<int> AudioGraphController::_get_processor_ids(int track_id) const
 }
 
 } // end namespace sushi::internal::engine::controller_impl
-
