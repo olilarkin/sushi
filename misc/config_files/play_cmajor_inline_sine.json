@@ -1,0 +1,26 @@
+{
+    "host_config" : {
+        "samplerate" : 48000,
+        "playing_mode" : "playing"
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "name" : "cmajor_sine",
+                    "type" : "cmajor",
+                    "source_code" : "processor InlineSine [[ main ]]\n{\n    output stream float outL, outR;\n\n    input event float frequencyHz [[ name: \"Frequency\", min: 20.0, max: 2000.0, init: 440.0 ]];\n    input event float level [[ name: \"Level\", min: 0.0, max: 0.5, init: 0.15 ]];\n\n    event frequencyHz (float value) { frequency = value; }\n    event level (float value)       { gain = value; }\n\n    void main()\n    {\n        loop\n        {\n            let sample = gain * sin (phase);\n            outL <- sample;\n            outR <- sample;\n\n            phase = addModulo2Pi (phase, float (frequency * processor.period * twoPi));\n            advance();\n        }\n    }\n\n    float frequency = 440.0f;\n    float gain = 0.15f;\n    float phase = 0.0f;\n}\n"
+                }
+            ]
+        }
+    ]
+}
