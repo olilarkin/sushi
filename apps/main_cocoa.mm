@@ -120,24 +120,44 @@ static void pipe_signal_handler([[maybe_unused]] int sig)
     ELKLOG_LOG_INFO("Pipe signal received and ignored: {}", sig);
 }
 
-static void exit_on_signal([[maybe_unused]] int sig)
-{
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [NSApp terminate:nil];
-    });
-}
+@protocol SushiTerminationControlling <NSObject>
+- (void)requestAuthorizedTermination:(id)sender;
+@end
 
-@interface SushiAppDelegate : NSObject <NSApplicationDelegate>
+@interface SushiAppDelegate : NSObject <NSApplicationDelegate, SushiTerminationControlling, NSWindowDelegate>
 {
     std::unique_ptr<Sushi> _sushi;
     SushiStatusBar* _statusBar;
     int _argc;
     char** _argv;
+    BOOL _restrictAppleQuit;
+    BOOL _allowTermination;
+    BOOL _showingQuitAlert;
+    NSPanel* _quitWarningPanel;
+    id _keyDownMonitor;
 }
 
 - (instancetype)initWithArgc:(int)argc argv:(char**)argv;
+- (void)requestAuthorizedTermination:(id)sender;
+- (void)showQuitViaStatusBarPanel;
+- (void)closeQuitViaStatusBarPanel:(id)sender;
 
 @end
+
+static void exit_on_signal([[maybe_unused]] int sig)
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        id<SushiTerminationControlling> delegate = (id<SushiTerminationControlling>)[NSApp delegate];
+        if (delegate != nil)
+        {
+            [delegate requestAuthorizedTermination:nil];
+        }
+        else
+        {
+            [NSApp terminate:nil];
+        }
+    });
+}
 
 @implementation SushiAppDelegate
 
@@ -148,6 +168,11 @@ static void exit_on_signal([[maybe_unused]] int sig)
     {
         _argc = argc;
         _argv = argv;
+        _restrictAppleQuit = NO;
+        _allowTermination = NO;
+        _showingQuitAlert = NO;
+        _quitWarningPanel = nil;
+        _keyDownMonitor = nil;
     }
     return self;
 }
@@ -222,16 +247,117 @@ static void exit_on_signal([[maybe_unused]] int sig)
     }
 
     _statusBar = [[SushiStatusBar alloc] initWithController:_sushi->controller()];
+    _restrictAppleQuit = YES;
+
+    __weak SushiAppDelegate* weakSelf = self;
+    _keyDownMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                                            handler:^NSEvent* (NSEvent* event)
+    {
+        auto modifiers = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+        NSString* key = event.charactersIgnoringModifiers.lowercaseString;
+        if ((modifiers & NSEventModifierFlagCommand) && [key isEqualToString:@"q"])
+        {
+            [weakSelf showQuitViaStatusBarPanel];
+            return nil;
+        }
+        return event;
+    }];
+}
+
+- (void)requestAuthorizedTermination:(id)sender
+{
+    _allowTermination = YES;
+    [NSApp terminate:sender];
+}
+
+- (void)showQuitViaStatusBarPanel
+{
+    if (_showingQuitAlert)
+    {
+        [_quitWarningPanel makeKeyAndOrderFront:nil];
+        return;
+    }
+
+    if (_quitWarningPanel == nil)
+    {
+        _quitWarningPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 520, 170)
+                                                       styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+                                                         backing:NSBackingStoreBuffered
+                                                           defer:NO];
+        [_quitWarningPanel setTitle:@"Quit Sushi from the status bar menu"];
+        [_quitWarningPanel setReleasedWhenClosed:NO];
+        [_quitWarningPanel setFloatingPanel:YES];
+        [_quitWarningPanel setLevel:NSFloatingWindowLevel];
+        _quitWarningPanel.delegate = self;
+
+        NSView* contentView = _quitWarningPanel.contentView;
+
+        auto* bodyLine1 = [NSTextField labelWithString:@"Apple Quit and Command-Q are disabled for Sushi GUI."];
+        bodyLine1.frame = NSMakeRect(20, 102, 480, 22);
+        bodyLine1.font = [NSFont systemFontOfSize:14 weight:NSFontWeightSemibold];
+        [contentView addSubview:bodyLine1];
+
+        auto* bodyLine2 = [NSTextField labelWithString:@"Quit from the status bar menu, or shut it down remotely via gRPC."];
+        bodyLine2.frame = NSMakeRect(20, 72, 480, 18);
+        [contentView addSubview:bodyLine2];
+
+        auto* bodyLine3 = [NSTextField labelWithString:@"The app will stay running until one of those paths is used."];
+        bodyLine3.frame = NSMakeRect(20, 50, 480, 18);
+        [contentView addSubview:bodyLine3];
+
+        auto* button = [[NSButton alloc] initWithFrame:NSMakeRect(220, 12, 80, 30)];
+        button.title = @"OK";
+        button.bezelStyle = NSBezelStyleRounded;
+        button.keyEquivalent = @"\r";
+        button.keyEquivalentModifierMask = 0;
+        button.target = self;
+        button.action = @selector(closeQuitViaStatusBarPanel:);
+        [contentView addSubview:button];
+        [_quitWarningPanel setDefaultButtonCell:button.cell];
+    }
+
+    _showingQuitAlert = YES;
+    [_quitWarningPanel center];
+    [NSApp activateIgnoringOtherApps:YES];
+    [_quitWarningPanel makeKeyAndOrderFront:nil];
+}
+
+- (void)closeQuitViaStatusBarPanel:(id)sender
+{
+    (void)sender;
+    [_quitWarningPanel close];
+}
+
+- (void)windowWillClose:(NSNotification*)notification
+{
+    if (notification.object == _quitWarningPanel)
+    {
+        _showingQuitAlert = NO;
+    }
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender
 {
     (void)sender;
 
+    if (_restrictAppleQuit && !_allowTermination)
+    {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showQuitViaStatusBarPanel];
+        });
+        return NSTerminateCancel;
+    }
+
     if (_statusBar)
     {
         [_statusBar teardown];
         _statusBar = nil;
+    }
+
+    if (_keyDownMonitor != nil)
+    {
+        [NSEvent removeMonitor:_keyDownMonitor];
+        _keyDownMonitor = nil;
     }
 
     if (_sushi)
@@ -241,6 +367,7 @@ static void exit_on_signal([[maybe_unused]] int sig)
         ELKLOG_LOG_INFO("Sushi exiting normally!");
     }
 
+    _allowTermination = NO;
     return NSTerminateNow;
 }
 

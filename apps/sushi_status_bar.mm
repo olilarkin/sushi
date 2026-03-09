@@ -448,8 +448,9 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
     // -- Quit --
     auto* quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit Sushi"
-                                                action:@selector(terminate:)
+                                                action:@selector(requestAuthorizedTermination:)
                                          keyEquivalent:@"q"];
+    quitItem.target = NSApp.delegate;
     [menu addItem:quitItem];
 }
 
