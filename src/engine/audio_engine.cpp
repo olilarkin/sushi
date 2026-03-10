@@ -496,6 +496,14 @@ void AudioEngine::process_chunk(SampleBuffer<AUDIO_CHUNK_SIZE>* in_buffer,
     {
         _clip_detector.detect_clipped_samples(*out_buffer, _main_out_queue, false);
     }
+
+    _transport.send_link_audio(*out_buffer, out_buffer->channel_count());
+
+    if (_transport.link_audio_enabled())
+    {
+        out_buffer->clear();
+    }
+
     _process_timer.stop_timer(engine_timestamp, ENGINE_TIMING_ID);
 }
 
