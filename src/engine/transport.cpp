@@ -25,7 +25,8 @@
 #include <algorithm>
 
 #ifdef SUSHI_BUILD_WITH_ABLETON_LINK
-#include "ableton/Link.hpp"
+#include "ableton/LinkAudio.hpp"
+#include "ableton/util/FloatIntConversion.hpp"
 #ifdef _MSC_VER
 #undef DELETE // Because Link pulls in Windows headers
 #endif
@@ -66,14 +67,17 @@ public:
 };
 
 /**
- * @brief Wrapping Link with a custom clock
+ * @brief Wrapping Link with a custom clock, using LinkAudio for audio sharing support
  */
-class SushiLink : public ::ableton::BasicLink<RtSafeClock>
+class SushiLink : public ::ableton::BasicLinkAudio<RtSafeClock>
 {
 public:
   using Clock = RtSafeClock;
 
-  explicit SushiLink(double bpm) : ::ableton::BasicLink<Clock>(bpm) { }
+  explicit SushiLink(double bpm) : ::ableton::BasicLinkAudio<Clock>(bpm, "Sushi") { }
+
+private:
+  friend class ::ableton::LinkAudioSink;
 };
 
 #endif
@@ -412,6 +416,95 @@ void Transport::_output_ppqn_ticks()
 }
 
 #ifdef SUSHI_BUILD_WITH_ABLETON_LINK
+
+void Transport::send_link_audio(const ChunkSampleBuffer& buffer, int channels)
+{
+    if (!_link_audio_enabled || !_link_audio_sink)
+    {
+        return;
+    }
+
+    auto handle = ableton::LinkAudioSink::BufferHandle(*_link_audio_sink);
+    if (!handle)
+    {
+        if (_sample_count % (static_cast<int64_t>(_samplerate) * 2) < AUDIO_CHUNK_SIZE)
+        {
+            ELKLOG_LOG_DEBUG("Link Audio: no buffer handle available (no receiver listening?)");
+        }
+        return;
+    }
+
+    size_t num_frames = AUDIO_CHUNK_SIZE;
+
+    // Convert float samples to mono int16, matching Link Audio example (mono send)
+    for (size_t f = 0; f < num_frames; f++)
+    {
+        // Mix to mono if stereo
+        float sample = buffer.channel(0)[f];
+        if (channels > 1)
+        {
+            sample = (sample + buffer.channel(1)[f]) * 0.5f;
+        }
+        handle.samples[f] = ableton::util::floatToInt16(sample);
+    }
+
+    auto session = _link_controller->captureAudioSessionState();
+    // Use the Link clock directly for host time, matching the example
+    Time host_time = _link_controller->clock().micros();
+    double quantum = _beats_per_bar;
+    double beats_at_begin = session.beatAtTime(host_time, quantum);
+
+    bool ok = handle.commit(session, beats_at_begin, quantum,
+                            num_frames,
+                            size_t{1},  // mono, matching example
+                            static_cast<uint32_t>(_samplerate));
+
+    // Log once every ~2 seconds
+    if (_sample_count % (static_cast<int64_t>(_samplerate) * 2) < AUDIO_CHUNK_SIZE)
+    {
+        ELKLOG_LOG_DEBUG("Link Audio send: ok={}, beats={:.2f}, quantum={}, frames={}, rate={}, "
+                         "peak={}",
+                         ok, beats_at_begin, quantum, num_frames, _samplerate,
+                         handle.samples[0]);
+    }
+}
+
+void Transport::set_link_audio_enabled(bool enabled)
+{
+    _link_audio_enabled = enabled;
+    ELKLOG_LOG_INFO("Link Audio send {}, Link enabled: {}, Link Audio enabled: {}",
+                    enabled ? "enabling" : "disabling",
+                    _link_controller->isEnabled(),
+                    _link_controller->isLinkAudioEnabled());
+    if (enabled)
+    {
+        if (!_link_controller->isEnabled())
+        {
+            _link_controller->enable(true);
+        }
+        _link_controller->setChannelsChangedCallback([this]()
+        {
+            auto channels = _link_controller->channels();
+            ELKLOG_LOG_INFO("Link Audio channels changed, now {} channels:", channels.size());
+            for (const auto& ch : channels)
+            {
+                ELKLOG_LOG_INFO("  Channel: '{}', peer: '{}'", ch.name, ch.peerName);
+            }
+        });
+        _link_audio_sink = std::make_unique<ableton::LinkAudioSink>(
+            *_link_controller, "Sushi", 4096);
+        _link_controller->enableLinkAudio(true);
+        ELKLOG_LOG_INFO("Link Audio sink created, name: {}, maxSamples: {}, Link Audio now enabled: {}",
+                        _link_audio_sink->name(), _link_audio_sink->maxNumSamples(),
+                        _link_controller->isLinkAudioEnabled());
+    }
+    else
+    {
+        _link_controller->enableLinkAudio(false);
+        _link_audio_sink.reset();
+    }
+}
+
 void Transport::_set_link_playing(bool playing)
 {
     auto session = _link_controller->captureAppSessionState();
@@ -443,6 +536,8 @@ void Transport::_set_link_quantum(TimeSignature signature)
 }
 
 #else
+void Transport::send_link_audio(const ChunkSampleBuffer& /*buffer*/, int /*channels*/) {}
+void Transport::set_link_audio_enabled(bool /*enabled*/) {}
 void Transport::_set_link_playing(bool /*playing*/) {}
 void Transport::_set_link_tempo(float /*tempo*/) {}
 void Transport::_set_link_quantum(TimeSignature /*signature*/) {}

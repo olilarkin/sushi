@@ -1,0 +1,45 @@
+{
+    "host_config" : {
+        "samplerate" : 48000,
+        "playing_mode" : "playing",
+        "link_audio_send" : true,
+        "rt_midi_input_mappings" : [
+            {
+                "rt_midi_device" : 0,
+                "sushi_midi_port" : 0,
+                "virtual_port" : true
+            }
+        ]
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "path" : "/Users/oli/Library/Audio/Plug-Ins/VST3/IPlugInstrument.vst3",
+                    "name" : "IPlugInstrument",
+                    "type" : "vst3x",
+                    "uid" : "IPlugInstrument"
+                }
+            ]
+        }
+    ],
+    "midi" : {
+        "track_connections" : [
+            {
+                "port" : 0,
+                "channel" : "all",
+                "track" : "main",
+                "raw_midi" : false
+            }
+        ]
+    }
+}

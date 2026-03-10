@@ -30,6 +30,7 @@
 #include "sushi/constants.h"
 #include "sushi/types.h"
 #include "sushi/sushi_time.h"
+#include "sushi/sample_buffer.h"
 
 #include "library/event_interface.h"
 #include "library/rt_event.h"
@@ -39,7 +40,7 @@
 /* Forward declare Link, then we can include link.hpp from transport.cpp and
  * nowhere else, it pulls in a lot of dependencies that slow down compilation
  * significantly otherwise. */
-namespace ableton {class Link;}
+namespace ableton {class Link; class LinkAudioSink;}
 
 namespace sushi::internal {
 
@@ -251,6 +252,25 @@ public:
      */
     [[nodiscard]] PlayStateChange current_state_change() const { return _state_change; }
 
+    /**
+     * @brief Enable or disable Link Audio send. Non-RT, call before processing or when paused.
+     * @param enabled Whether to enable Link Audio sending
+     */
+    void set_link_audio_enabled(bool enabled);
+
+    /**
+     * @brief Query whether Link Audio send is enabled
+     * @return true if Link Audio sending is enabled
+     */
+    [[nodiscard]] bool link_audio_enabled() const { return _link_audio_enabled; }
+
+    /**
+     * @brief Send the current audio output buffer via Link Audio. RT-safe, called each chunk.
+     * @param buffer The rendered output buffer
+     * @param channels Number of output channels (1 or 2)
+     */
+    void send_link_audio(const ChunkSampleBuffer& buffer, int channels);
+
 private:
     void _update_internals();
     void _update_internal_sync(int64_t samples);
@@ -283,6 +303,10 @@ private:
     RtEventPipe*    _rt_event_dispatcher;
 
     std::unique_ptr<SushiLink> _link_controller;
+#ifdef SUSHI_BUILD_WITH_ABLETON_LINK
+    std::unique_ptr<ableton::LinkAudioSink> _link_audio_sink;
+#endif
+    bool _link_audio_enabled{false};
 
     PositionSource _position_source {PositionSource::CALCULATED};
 };
