@@ -47,6 +47,10 @@ R"(
         {
           "enum": ["internal", "midi", "ableton_link"]
         },
+        "link_audio_send":
+        {
+          "type": "boolean"
+        },
         "audio_clip_detection" :
         {
           "type": "object",

@@ -240,6 +240,13 @@ JsonConfigReturnStatus JsonConfigurator::load_host_config()
         _engine->set_tempo_sync_mode(mode);
     }
 
+    if (host_config.HasMember("link_audio_send"))
+    {
+        bool enabled = host_config["link_audio_send"].GetBool();
+        _engine->transport()->set_link_audio_enabled(enabled);
+        ELKLOG_LOG_INFO("Setting Link Audio send {}", enabled ? "enabled" : "disabled");
+    }
+
     if (host_config.HasMember("audio_clip_detection"))
     {
         const auto& clip_det = host_config["audio_clip_detection"].GetObject();

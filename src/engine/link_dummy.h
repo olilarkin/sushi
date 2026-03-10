@@ -21,6 +21,7 @@
 #define SUSHI_LINK_DUMMY_H
 
 #include <chrono>
+#include <string>
 
 namespace sushi::internal::engine {
 
@@ -35,6 +36,9 @@ public:
   void enable(bool /*bEnable*/) {}
   bool isStartStopSyncEnabled() const {return false;}
   void enableStartStopSync(bool /*bEnable*/) {}
+  bool isLinkAudioEnabled() const {return false;}
+  void enableLinkAudio(bool /*bEnable*/) {}
+  void setPeerName(std::string /*name*/) {}
   std::size_t numPeers() const {return 0;}
 
   template <typename Callback>
