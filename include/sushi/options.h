@@ -162,7 +162,8 @@ enum OptionIndex
     OPT_IDX_NO_GRPC,
     OPT_IDX_BASE_PLUGIN_PATH,
     OPT_IDX_SENTRY_CRASH_HANDLER,
-    OPT_IDX_SENTRY_DSN
+    OPT_IDX_SENTRY_DSN,
+    OPT_IDX_CONFIG_JSON
 };
 
 // Option types (UNUSED is generally used for options that take a value as argument)
@@ -483,6 +484,14 @@ const optionparser::Descriptor usage[] =
         "sentry-dsn",
         SushiArg::NonEmpty,
         "\t\t--sentry-dsn=<dsn.address> \tSet the DSN that sentry should upload crash logs to [default address=" SUSHI_STRINGIZE(SUSHI_SENTRY_DSN_DEFAULT) "]."
+    },
+    {
+        OPT_IDX_CONFIG_JSON,
+        OPT_TYPE_UNUSED,
+        "",
+        "config-json",
+        SushiArg::NonEmpty,
+        "\t\t--config-json=<json> \tSpecify configuration as a JSON string instead of a file."
     },
     // Don't touch this one (sets default values for optionparser library)
     { 0, 0, nullptr, nullptr, nullptr, nullptr}

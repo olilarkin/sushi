@@ -33,6 +33,9 @@ private enum Layout
     static let wireStrokeWidth: CGFloat = 2.0
     static let portDotRadius: CGFloat = 4.0
     static let midiDash: [CGFloat] = [6, 4]
+    static let mixerWidth: CGFloat = 120
+    static let mixerHeight: CGFloat = 52
+    static let mixerHSpacing: CGFloat = 16
 }
 
 // MARK: - Layout model
@@ -63,6 +66,8 @@ private struct TrackLayout
     let audioInEndpoint: EndpointRect?
     let audioOutEndpoint: EndpointRect?
     let midiInEndpoints: [EndpointRect]
+    let mixerRect: CGRect
+    let hasPan: Bool
 }
 
 private struct GraphLayout
@@ -120,21 +125,30 @@ private func computeLayout(model: NodeGraphModel) -> GraphLayout
         }
 
         // Track bounding box
-        let innerWidth: CGFloat
+        let nodesWidth: CGFloat
         if nodes.isEmpty
         {
-            innerWidth = Layout.nodeWidth + Layout.trackPadding * 2
+            nodesWidth = Layout.nodeWidth + Layout.trackPadding * 2
         }
         else
         {
-            innerWidth = (nodes.last!.rect.maxX - procStartX - Layout.trackPadding) + Layout.trackPadding * 2
+            nodesWidth = (nodes.last!.rect.maxX - procStartX - Layout.trackPadding) + Layout.trackPadding * 2
         }
+        let innerWidth = nodesWidth + Layout.mixerHSpacing + Layout.mixerWidth + Layout.trackPadding
         let boxHeight = Layout.nodeHeight + Layout.trackPadding * 2
         let boundingBox = CGRect(
             x: procStartX,
             y: procY,
             width: innerWidth,
             height: boxHeight
+        )
+
+        // Mixer rect inside the track box, right side
+        let mixerRect = CGRect(
+            x: procStartX + nodesWidth + Layout.mixerHSpacing,
+            y: procY + Layout.trackPadding,
+            width: Layout.mixerWidth,
+            height: Layout.mixerHeight
         )
 
         // Audio In endpoint
@@ -198,7 +212,9 @@ private func computeLayout(model: NodeGraphModel) -> GraphLayout
             nodes: nodes,
             audioInEndpoint: audioInEndpoint,
             audioOutEndpoint: audioOutEndpoint,
-            midiInEndpoints: midiInEndpoints
+            midiInEndpoints: midiInEndpoints,
+            mixerRect: mixerRect,
+            hasPan: track.hasPan
         ))
 
         let rowBottom = max(boundingBox.maxY, audioInEndpoint?.rect.maxY ?? 0, audioOutEndpoint?.rect.maxY ?? 0)
@@ -286,18 +302,33 @@ struct VisualGraphView: View
 
         ScrollView([.horizontal, .vertical])
         {
-            Canvas { context, _ in
-                drawTrackBackgrounds(context: &context, layout: layout)
-                drawWires(context: &context, layout: layout)
-                drawEndpoints(context: &context, layout: layout)
-                drawProcessorNodes(context: &context, layout: layout)
-                drawTrackLabels(context: &context, layout: layout)
+            ZStack(alignment: .topLeading)
+            {
+                Canvas { context, _ in
+                    drawTrackBackgrounds(context: &context, layout: layout)
+                    drawWires(context: &context, layout: layout)
+                    drawEndpoints(context: &context, layout: layout)
+                    drawProcessorNodes(context: &context, layout: layout)
+                    drawTrackLabels(context: &context, layout: layout)
+                    drawMixerBackgrounds(context: &context, layout: layout)
+                }
+                .frame(width: layout.totalSize.width, height: layout.totalSize.height)
+                .onTapGesture { location in
+                    handleTap(at: location, layout: layout)
+                }
+
+                ForEach(layout.tracks, id: \.trackId) { track in
+                    MixerOverlay(
+                        trackId: track.trackId,
+                        hasPan: track.hasPan,
+                        model: model
+                    )
+                    .frame(width: track.mixerRect.width, height: track.mixerRect.height)
+                    .offset(x: track.mixerRect.minX, y: track.mixerRect.minY)
+                }
             }
             .frame(width: layout.totalSize.width, height: layout.totalSize.height)
             .coordinateSpace(name: "canvas")
-            .onTapGesture { location in
-                handleTap(at: location, layout: layout)
-            }
         }
         .onChange(of: model.tracks.map({ $0.id })) { _ in
             textCache.clear()
@@ -566,6 +597,19 @@ struct VisualGraphView: View
         }
     }
 
+    private func drawMixerBackgrounds(context: inout GraphicsContext, layout: GraphLayout)
+    {
+        for track in layout.tracks
+        {
+            let bg = Color(white: 0.14)
+            let border = Color(white: 0.28)
+            let path = RoundedRectangle(cornerRadius: Layout.cornerRadius)
+                .path(in: track.mixerRect)
+            context.fill(path, with: .color(bg))
+            context.stroke(path, with: .color(border), lineWidth: 1)
+        }
+    }
+
     // MARK: Hit testing
 
     private func handleTap(at point: CGPoint, layout: GraphLayout)
@@ -581,5 +625,77 @@ struct VisualGraphView: View
                 }
             }
         }
+    }
+}
+
+// MARK: - Mixer overlay (SwiftUI controls over canvas)
+
+private struct MixerOverlay: View
+{
+    let trackId: Int
+    let hasPan: Bool
+    @ObservedObject var model: NodeGraphModel
+    @State private var gainDb: Float = 0
+    @State private var pan: Float = 0
+
+    var body: some View
+    {
+        VStack(spacing: 2)
+        {
+            HStack(spacing: 4)
+            {
+                Text(gainLabel)
+                    .font(.system(size: 9).monospacedDigit())
+                    .foregroundColor(Color(white: 0.6))
+                    .frame(width: 40, alignment: .trailing)
+                Slider(value: $gainDb, in: -120...24, step: 0.1)
+                    .controlSize(.mini)
+                    .onChange(of: gainDb) { newValue in
+                        model.setGain(newValue, forTrackId: trackId)
+                    }
+            }
+
+            if hasPan
+            {
+                HStack(spacing: 4)
+                {
+                    Text(panLabel)
+                        .font(.system(size: 9).monospacedDigit())
+                        .foregroundColor(Color(white: 0.6))
+                        .frame(width: 40, alignment: .trailing)
+                    Slider(value: $pan, in: -1...1, step: 0.01)
+                        .controlSize(.mini)
+                        .onChange(of: pan) { newValue in
+                            model.setPan(newValue, forTrackId: trackId)
+                        }
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .onAppear { syncFromModel() }
+        .onChange(of: model.tracks) { _ in syncFromModel() }
+    }
+
+    private func syncFromModel()
+    {
+        if let track = model.tracks.first(where: { $0.id == trackId })
+        {
+            gainDb = track.gain
+            pan = track.pan
+        }
+    }
+
+    private var gainLabel: String
+    {
+        if gainDb <= -120 { return "-inf dB" }
+        return String(format: "%.1f dB", gainDb)
+    }
+
+    private var panLabel: String
+    {
+        if abs(pan) < 0.01 { return "C" }
+        if pan < 0 { return String(format: "L%.0f", abs(pan) * 100) }
+        return String(format: "R%.0f", pan * 100)
     }
 }
