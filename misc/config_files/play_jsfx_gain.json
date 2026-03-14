@@ -1,0 +1,30 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "name" : "gain",
+                    "type" : "jsfx",
+                    "source_code" : "desc:Simple Stereo Gain\nslider1:0<-60,12,0.1>Gain (dB)\n\n@slider\ngain = 10^(slider1/20);\n\n@sample\nspl0 *= gain;\nspl1 *= gain;\n"
+                }
+            ]
+        }
+    ]
+}

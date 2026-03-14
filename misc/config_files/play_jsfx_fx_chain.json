@@ -1,0 +1,56 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "name" : "lofi",
+                    "type" : "jsfx",
+                    "source_code" : "desc:Lo-Fi Bitcrusher\nslider1:16<1,16,1>Bit Depth\nslider2:1<1,64,1>Sample Rate Divisor\n\n@slider\nquant = 2^slider1;\ndivisor = slider2;\n\n@sample\ncounter += 1;\ncounter >= divisor ? (\n  hold0 = floor(spl0 * quant + 0.5) / quant;\n  hold1 = floor(spl1 * quant + 0.5) / quant;\n  counter = 0;\n);\nspl0 = hold0;\nspl1 = hold1;\n"
+                },
+                {
+                    "name" : "tremolo",
+                    "type" : "jsfx",
+                    "source_code" : "desc:Stereo Tremolo\nslider1:4<0.1,20,0.1>Rate (Hz)\nslider2:50<0,100,1>Depth (%)\n\n@slider\nrate = slider1;\ndepth = slider2 / 100;\n\n@sample\nphase += rate * 2 * $pi / srate;\nphase >= 2 * $pi ? phase -= 2 * $pi;\nmod = 1 - depth * (0.5 + 0.5 * sin(phase));\nspl0 *= mod;\nspl1 *= mod;\n"
+                },
+                {
+                    "name" : "output_gain",
+                    "type" : "jsfx",
+                    "source_code" : "desc:Output Gain\nslider1:0<-60,12,0.1>Gain (dB)\n\n@slider\ngain = 10^(slider1/20);\n\n@sample\nspl0 *= gain;\nspl1 *= gain;\n"
+                }
+            ]
+        }
+    ],
+    "initial_state" : [
+        {
+            "processor" : "lofi",
+            "parameters" : {
+                "Bit Depth" : 0.75,
+                "Sample Rate Divisor" : 0.05
+            }
+        },
+        {
+            "processor" : "tremolo",
+            "parameters" : {
+                "Rate (Hz)" : 0.2,
+                "Depth (%)" : 0.6
+            }
+        }
+    ]
+}
