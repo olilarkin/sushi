@@ -35,7 +35,11 @@ if (${SUSHI_WITH_VST3})
     endif()
 
     # VST3 example plugins are needed by unit tests
-    set(SMTG_ADD_VST3_PLUGINS_SAMPLES ON CACHE BOOL "" FORCE)
+    if(SUSHI_WITH_UNIT_TESTS)
+        set(SMTG_ADD_VST3_PLUGINS_SAMPLES ON CACHE BOOL "" FORCE)
+    else()
+        set(SMTG_ADD_VST3_PLUGINS_SAMPLES OFF CACHE BOOL "" FORCE)
+    endif()
 
     # Don't install example plugins in ~/.vst3, keep them in the build directory
     set(SMTG_PLUGIN_TARGET_PATH ${CMAKE_CURRENT_BINARY_DIR}/vst3sdk/VST3 CACHE STRING "" FORCE)
