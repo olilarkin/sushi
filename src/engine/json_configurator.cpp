@@ -1094,6 +1094,14 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
             plugin_path = plugin_def["path"].GetString();
         }
     }
+    else if (type == "jsfx")
+    {
+        plugin_type = PluginType::JSFX;
+        if (plugin_def.HasMember("path"))
+        {
+            plugin_path = plugin_def["path"].GetString();
+        }
+    }
     else // Anything else should have been caught by the validation step before this
     {
         plugin_type = PluginType::LV2;
@@ -1104,7 +1112,7 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
     plugin_info.uid = plugin_uid;
     plugin_info.path = plugin_path;
     plugin_info.type = plugin_type;
-    if (plugin_type == PluginType::CMAJOR && plugin_def.HasMember("source_code"))
+    if ((plugin_type == PluginType::CMAJOR || plugin_type == PluginType::JSFX) && plugin_def.HasMember("source_code"))
     {
         plugin_info.source_code = plugin_def["source_code"].GetString();
     }
