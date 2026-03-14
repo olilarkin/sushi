@@ -85,6 +85,7 @@ SimpleSynthPlugin::SimpleSynthPlugin(HostControl host_control) : InternalPlugin(
                                         new FloatParameterPreProcessor(0.002f, 1.0f));
 
     _max_input_channels = 0;
+    _supports_midi_input = true;
 };
 
 ProcessorReturnCode SimpleSynthPlugin::init(float sample_rate)
