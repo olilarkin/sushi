@@ -128,6 +128,32 @@ R"(
         {"required": ["source_code"]}
       ]
     },
+    "jsfx_plugin" :
+    {
+      "type" : "object",
+      "properties": {
+        "path":{
+          "type": "string",
+          "minLength": 1
+        },
+        "source_code":{
+          "type": "string",
+          "minLength": 1
+        },
+        "name":{
+          "type": "string",
+          "minLength": 1
+        },
+        "type":{
+          "enum": ["jsfx"]
+        }
+      },
+      "required": ["name", "type"],
+      "anyOf": [
+        {"required": ["path"]},
+        {"required": ["source_code"]}
+      ]
+    },
     "lv2_plugin" :
     {
       "type" : "object",
@@ -243,6 +269,7 @@ R"(
               {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/auv2_plugin"},
               {"$ref": "#/definitions/cmajor_plugin"},
+              {"$ref": "#/definitions/jsfx_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }
@@ -277,6 +304,7 @@ R"(
               {"$ref": "#/definitions/clap_plugin"},
               {"$ref": "#/definitions/auv2_plugin"},
               {"$ref": "#/definitions/cmajor_plugin"},
+              {"$ref": "#/definitions/jsfx_plugin"},
               {"$ref": "#/definitions/lv2_plugin"}
             ]
           }
