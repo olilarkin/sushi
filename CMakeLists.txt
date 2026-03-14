@@ -56,6 +56,7 @@ set(SUSHI_WITH_VST2_DEFAULT OFF)
 set(SUSHI_WITH_CLAP_DEFAULT OFF)
 set(SUSHI_WITH_AUV2_DEFAULT OFF)
 set(SUSHI_WITH_CMAJOR_DEFAULT OFF)
+set(SUSHI_WITH_JSFX_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -139,6 +140,7 @@ option(SUSHI_WITH_VST2 "Enable Vst 2 support" ${SUSHI_WITH_VST2_DEFAULT})
 option(SUSHI_WITH_CLAP "Enable CLAP support" ${SUSHI_WITH_CLAP_DEFAULT})
 option(SUSHI_WITH_AUV2 "Enable Audio Unit V2 support" ${SUSHI_WITH_AUV2_DEFAULT})
 option(SUSHI_WITH_CMAJOR "Enable Cmajor support" ${SUSHI_WITH_CMAJOR_DEFAULT})
+option(SUSHI_WITH_JSFX "Enable JSFX support" ${SUSHI_WITH_JSFX_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -511,6 +513,29 @@ if (${SUSHI_WITH_CMAJOR})
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_CMAJOR -DCMAJ_USE_QUICKJS_WORKER=1)
 endif()
 
+################
+# JSFX setup   #
+################
+
+if (${SUSHI_WITH_JSFX})
+    message("Building with JSFX support.")
+
+    set(LIBJSFX_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(LIBJSFX_BUILD_CLI OFF CACHE BOOL "" FORCE)
+    add_subdirectory(third-party/libjsfx EXCLUDE_FROM_ALL)
+
+    set(ADDITIONAL_JSFX_SOURCES
+        src/library/jsfx/jsfx_wrapper.h
+        src/library/jsfx/jsfx_wrapper.cpp
+        src/library/jsfx/jsfx_processor_factory.h
+        src/library/jsfx/jsfx_processor_factory.cpp)
+
+    set(INCLUDE_DIRS ${INCLUDE_DIRS}
+                     "${PROJECT_SOURCE_DIR}/third-party/libjsfx/include")
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} libjsfx_static)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_JSFX)
+endif()
+
 ###############
 # VST 3 setup #
 ###############
@@ -597,7 +622,7 @@ if (${SUSHI_WITH_VST3})
     # In yocto env / cross compiling scenarios, this is not needed as mda-vst3 plugins are
     # built already. Also, this causes an "exec-format" error since the plugins need a specific
     # method of compilation during cross compilation process.
-    if (NOT CMAKE_CROSSCOMPILING)
+    if (NOT CMAKE_CROSSCOMPILING AND TARGET mda-vst3)
         # Triggering mda-vst3 build - used by sample sushi json configurations under misc/config_files.
         set_target_properties(mda-vst3 PROPERTIES EXCLUDE_FROM_ALL False)
     endif()
@@ -809,6 +834,7 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_CLAP_SOURCES}"
                                    "${ADDITIONAL_AUV2_SOURCES}"
                                    "${ADDITIONAL_CMAJOR_SOURCES}"
+                                   "${ADDITIONAL_JSFX_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
                                    "${ADDITIONAL_CMAJOR_OBJECTS}"
                                    "${MIDI_SOURCES}")
