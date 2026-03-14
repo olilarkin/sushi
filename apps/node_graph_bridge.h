@@ -62,6 +62,9 @@
 @property (nonatomic, readonly, copy) NSString* name;
 @property (nonatomic, readonly) int channels;
 @property (nonatomic, readonly, copy) NSArray<SushiProcessorNode*>* processors;
+@property (nonatomic, readonly) float gain;    // dB, -120..24
+@property (nonatomic, readonly) float pan;     // -1..1
+@property (nonatomic, readonly) BOOL hasPan;
 
 @end
 
@@ -90,6 +93,8 @@
 - (BOOL)hasEditorForProcessor:(int)processorId;
 - (BOOL)isEditorOpenForProcessor:(int)processorId;
 - (void)toggleEditorForProcessor:(int)processorId;
+- (void)setGain:(float)gainDb forTrack:(int)trackId;
+- (void)setPan:(float)pan forTrack:(int)trackId;
 - (void)addListener:(id<SushiGraphChangeListener>)listener;
 - (void)removeListener:(id<SushiGraphChangeListener>)listener;
 - (void)shutdown;

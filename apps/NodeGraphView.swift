@@ -84,6 +84,7 @@ private struct TrackRow: View
     {
         DisclosureGroup(isExpanded: $isExpanded)
         {
+            TrackMixerControls(track: track, model: model)
             ForEach(track.processors) { proc in
                 ProcessorRow(proc: proc, model: model)
             }
@@ -99,6 +100,81 @@ private struct TrackRow: View
                     .foregroundColor(.secondary)
             }
         }
+    }
+}
+
+private struct TrackMixerControls: View
+{
+    let track: TrackViewModel
+    let model: NodeGraphModel
+    @State private var gainDb: Float
+    @State private var pan: Float
+
+    init(track: TrackViewModel, model: NodeGraphModel)
+    {
+        self.track = track
+        self.model = model
+        _gainDb = State(initialValue: track.gain)
+        _pan = State(initialValue: track.pan)
+    }
+
+    var body: some View
+    {
+        VStack(spacing: 6)
+        {
+            HStack(spacing: 8)
+            {
+                Image(systemName: "speaker.wave.2")
+                    .foregroundColor(.secondary)
+                    .frame(width: 16)
+                Text(gainLabel)
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+                    .frame(width: 52, alignment: .trailing)
+                Slider(value: $gainDb, in: -120...24, step: 0.1)
+                {
+                    Text("Gain")
+                }
+                .onChange(of: gainDb) { newValue in
+                    model.setGain(newValue, forTrackId: track.id)
+                }
+            }
+
+            if track.hasPan
+            {
+                HStack(spacing: 8)
+                {
+                    Image(systemName: "arrow.left.and.right")
+                        .foregroundColor(.secondary)
+                        .frame(width: 16)
+                    Text(panLabel)
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 52, alignment: .trailing)
+                    Slider(value: $pan, in: -1...1, step: 0.01)
+                    {
+                        Text("Pan")
+                    }
+                    .onChange(of: pan) { newValue in
+                        model.setPan(newValue, forTrackId: track.id)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var gainLabel: String
+    {
+        if gainDb <= -120 { return "-inf dB" }
+        return String(format: "%.1f dB", gainDb)
+    }
+
+    private var panLabel: String
+    {
+        if abs(pan) < 0.01 { return "C" }
+        if pan < 0 { return String(format: "L%.0f", abs(pan) * 100) }
+        return String(format: "R%.0f", pan * 100)
     }
 }
 

@@ -191,7 +191,6 @@ static void exit_on_signal([[maybe_unused]] int sig)
     }
 
     SushiOptions options;
-    options.config_source = sushi::ConfigurationSource::FILE;
 
     auto option_status = parse_options(argc, argv, options);
     if (option_status == ParseStatus::ERROR)
