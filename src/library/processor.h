@@ -204,6 +204,7 @@ public:
     int max_output_channels() const {return _max_output_channels;}
     int input_channels() const {return  _current_input_channels;}
     int output_channels() const {return _current_output_channels;}
+    bool supports_midi_input() const {return _supports_midi_input;}
 
     /**
      * @brief Set the number of input audio channels of the Processor.
@@ -514,6 +515,7 @@ protected:
     bool _enabled{false};
     bool _bypassed{false};
     bool _on_track{false};
+    bool _supports_midi_input{false};
 
     HostControl _host_control;
 

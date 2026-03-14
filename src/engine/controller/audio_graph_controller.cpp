@@ -37,7 +37,10 @@ inline control::ProcessorInfo to_external(const Processor* proc)
                               .name = proc->name(),
                               .parameter_count = proc->parameter_count(),
                               .program_count = proc->supports_programs()? proc->program_count() : 0,
-                              .type = to_external(proc->info().type)};
+                              .type = to_external(proc->info().type),
+                              .input_channels = proc->max_input_channels(),
+                              .output_channels = proc->max_output_channels(),
+                              .supports_midi_input = proc->supports_midi_input()};
 }
 
 inline control::TrackInfo to_external(const Track* track, std::vector<int> proc_ids)

@@ -127,6 +127,9 @@ struct ProcessorInfo
     int         parameter_count;
     int         program_count;
     PluginType  type;
+    int         input_channels{0};
+    int         output_channels{0};
+    bool        supports_midi_input{false};
 };
 
 struct ProgramInfo
