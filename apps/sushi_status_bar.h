@@ -27,6 +27,9 @@ namespace sushi::control {
 class SushiControl;
 }
 
+@class SushiGraphBridge;
+@class NodeGraphWindowController;
+
 @interface SushiStatusBar : NSObject
 
 - (instancetype)initWithController:(sushi::control::SushiControl*)controller;

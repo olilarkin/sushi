@@ -27,6 +27,17 @@
 #include "sushi/control_interface.h"
 #include "sushi/control_notifications.h"
 #include "sushi_status_bar.h"
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+#include "node_graph_bridge.h"
+
+// NodeGraphWindowController is @objc in Swift — declare its interface
+// here so ObjC++ can call it without a generated -Swift.h header.
+@interface NodeGraphWindowController : NSObject
+- (instancetype)initWithBridge:(SushiGraphBridge*)bridge;
+- (void)showWindow;
+- (void)teardown;
+@end
+#endif
 
 using namespace sushi::control;
 
@@ -216,6 +227,12 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
     // Set of processor IDs whose editors the user has explicitly opened
     std::set<int> _openEditorIds;
 
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+    // Audio graph window
+    SushiGraphBridge* _graphBridge;
+    NodeGraphWindowController* _nodeGraphWindowController;
+#endif
+
     // Static info queried once
     NSString* _versionString;
     NSString* _audioInfoString;
@@ -292,11 +309,24 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
     // Enable timing stats so we get CPU notifications
     _controller->timing_controller()->set_timing_statistics_enabled(true);
 
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+    // Audio graph bridge for SwiftUI viewer
+    _graphBridge = [[SushiGraphBridge alloc] initWithController:controller];
+#endif
+
     return self;
 }
 
 - (void)teardown
 {
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+    [_nodeGraphWindowController teardown];
+    _nodeGraphWindowController = nil;
+
+    [_graphBridge shutdown];
+    _graphBridge = nil;
+#endif
+
     if (_bridge)
     {
         _bridge->shutdown();
@@ -428,6 +458,17 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
     // -- Tracks section --
     [self buildTrackMenuItems:menu];
+
+    [menu addItem:[NSMenuItem separatorItem]];
+
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+    // -- Show Audio Graph --
+    auto* graphItem = [[NSMenuItem alloc] initWithTitle:@"Show Audio Graph"
+                                                 action:@selector(showNodeGraph:)
+                                          keyEquivalent:@""];
+    graphItem.target = self;
+    [menu addItem:graphItem];
+#endif
 
     [menu addItem:[NSMenuItem separatorItem]];
 
@@ -704,6 +745,18 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
         });
     }
 }
+
+#ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
+- (void)showNodeGraph:(id)sender
+{
+    (void)sender;
+    if (!_nodeGraphWindowController)
+    {
+        _nodeGraphWindowController = [[NodeGraphWindowController alloc] initWithBridge:_graphBridge];
+    }
+    [_nodeGraphWindowController showWindow];
+}
+#endif
 
 - (void)openAllEditors:(id)sender
 {
