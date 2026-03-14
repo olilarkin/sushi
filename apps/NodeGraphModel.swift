@@ -15,7 +15,7 @@
 
 import Foundation
 
-struct ProcessorViewModel: Identifiable
+struct ProcessorViewModel: Identifiable, Equatable
 {
     let id: Int
     let name: String
@@ -23,12 +23,15 @@ struct ProcessorViewModel: Identifiable
     let hasEditor: Bool
 }
 
-struct TrackViewModel: Identifiable
+struct TrackViewModel: Identifiable, Equatable
 {
     let id: Int
     let name: String
     let channels: Int
     let processors: [ProcessorViewModel]
+    var gain: Float    // dB, -120..24
+    var pan: Float     // -1..1
+    let hasPan: Bool
 }
 
 struct AudioConnectionVM: Hashable
@@ -73,6 +76,24 @@ class NodeGraphModel: NSObject, ObservableObject, SushiGraphChangeListener
         bridge.toggleEditor(forProcessor: Int32(processorId))
     }
 
+    func setGain(_ gainDb: Float, forTrackId trackId: Int)
+    {
+        bridge.setGain(gainDb, forTrack: Int32(trackId))
+        if let idx = tracks.firstIndex(where: { $0.id == trackId })
+        {
+            tracks[idx].gain = gainDb
+        }
+    }
+
+    func setPan(_ pan: Float, forTrackId trackId: Int)
+    {
+        bridge.setPan(pan, forTrack: Int32(trackId))
+        if let idx = tracks.firstIndex(where: { $0.id == trackId })
+        {
+            tracks[idx].pan = pan
+        }
+    }
+
     func reload()
     {
         guard let objcTracks = bridge.allTracks() else
@@ -97,7 +118,10 @@ class NodeGraphModel: NSObject, ObservableObject, SushiGraphChangeListener
                 id: Int(track.trackId),
                 name: track.name ?? "",
                 channels: Int(track.channels),
-                processors: procs
+                processors: procs,
+                gain: track.gain,
+                pan: track.pan,
+                hasPan: track.hasPan
             )
         }
 

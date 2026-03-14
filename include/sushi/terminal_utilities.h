@@ -118,6 +118,12 @@ static ParseStatus parse_options(int argc, char* argv[], sushi::SushiOptions& op
 
                 case OPT_IDX_CONFIG_FILE:
                     options.config_filename.assign(opt.arg);
+                    options.config_source = ConfigurationSource::FILE;
+                    break;
+
+                case OPT_IDX_CONFIG_JSON:
+                    options.json_string.assign(opt.arg);
+                    options.config_source = ConfigurationSource::JSON_STRING;
                     break;
 
                 case OPT_IDX_USE_OFFLINE:
