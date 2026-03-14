@@ -749,6 +749,10 @@ bool Vst3xWrapper::_setup_event_buses()
     int input_buses = _instance.component()->getBusCount(Steinberg::Vst::MediaTypes::kEvent, Steinberg::Vst::BusDirections::kInput);
     int output_buses = _instance.component()->getBusCount(Steinberg::Vst::MediaTypes::kEvent, Steinberg::Vst::BusDirections::kOutput);
     ELKLOG_LOG_INFO("Plugin has {} event input buffers and {} event output buffers", input_buses, output_buses);
+    if (input_buses > 0)
+    {
+        _supports_midi_input = true;
+    }
     /* Try to activate all buses here */
     for (int i = 0; i < input_buses; ++i)
     {
