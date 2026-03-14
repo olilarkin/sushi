@@ -18,7 +18,9 @@
 #include "internal_processor_factory.h"
 #include "vst2x/vst2x_processor_factory.h"
 #include "vst3x/vst3x_processor_factory.h"
+#ifdef SUSHI_BUILD_WITH_CLAP
 #include "clap/clap_processor_factory.h"
+#endif
 #include "auv2/auv2_processor_factory.h"
 #ifdef SUSHI_BUILD_WITH_CMAJOR
 #include "cmajor/cmajor_processor_factory.h"
@@ -59,9 +61,13 @@ PluginRegistry::new_instance(const PluginInfo& plugin_info,
             }
             case PluginType::CLAP:
             {
+#ifdef SUSHI_BUILD_WITH_CLAP
                 std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<clap_wrapper::ClapProcessorFactory>();
                 _factories[plugin_info.type] = std::move(new_factory);
                 break;
+#else
+                return {ProcessorReturnCode::PLUGIN_LOAD_ERROR, nullptr};
+#endif
             }
             case PluginType::AUV2:
             {
