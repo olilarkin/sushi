@@ -377,7 +377,8 @@ public:
                                             const std::string& file,
                                             PluginType type,
                                             int track_id,
-                                            std::optional<int> before_processor_id) override
+                                            std::optional<int> before_processor_id,
+                                            const std::string& /*source_code*/ = "") override
     {
         _args_from_last_call.clear();
         _args_from_last_call["name"] = name;
