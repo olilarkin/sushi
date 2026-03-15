@@ -90,7 +90,8 @@ enum class PluginType
     CLAP,
     LV2,
     AUV2,
-    CMAJOR
+    CMAJOR,
+    JSFX
 };
 
 enum class ParameterType

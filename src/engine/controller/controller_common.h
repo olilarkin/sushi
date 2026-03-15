@@ -155,6 +155,7 @@ inline PluginType to_internal(control::PluginType type)
         case control::PluginType::LV2:        return PluginType::LV2;
         case control::PluginType::AUV2:       return PluginType::AUV2;
         case control::PluginType::CMAJOR:     return PluginType::CMAJOR;
+        case control::PluginType::JSFX:       return PluginType::JSFX;
         default:                              return PluginType::INTERNAL;
     }
 }
@@ -170,6 +171,7 @@ inline control::PluginType to_external(PluginType type)
         case PluginType::LV2:        return control::PluginType::LV2;
         case PluginType::AUV2:       return control::PluginType::AUV2;
         case PluginType::CMAJOR:     return control::PluginType::CMAJOR;
+        case PluginType::JSFX:       return control::PluginType::JSFX;
         default:                     return control::PluginType::INTERNAL;
     }
 }

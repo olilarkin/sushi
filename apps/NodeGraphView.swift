@@ -222,6 +222,7 @@ private struct ProcessorRow: View
         case "AUV2": return .orange
         case "LV2":  return .green
         case "CMAJ": return .pink
+        case "JSFX": return .yellow
         case "INT":  return .gray
         default:     return .secondary
         }
