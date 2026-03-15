@@ -284,6 +284,7 @@ private func pluginTypeColor(_ type: String) -> Color
     case "AUV2": return Color(red: 0.9, green: 0.6, blue: 0.25)
     case "LV2":  return Color(red: 0.35, green: 0.75, blue: 0.45)
     case "CMAJ": return Color(red: 0.9, green: 0.45, blue: 0.6)
+    case "JSFX": return Color(red: 0.8, green: 0.7, blue: 0.3)
     case "INT":  return Color(red: 0.55, green: 0.55, blue: 0.55)
     default:     return .secondary
     }

@@ -179,6 +179,7 @@ static NSString* plugin_type_string(PluginType type)
         case PluginType::CLAP:     return @"CLAP";
         case PluginType::AUV2:     return @"AUV2";
         case PluginType::CMAJOR:   return @"CMAJ";
+        case PluginType::JSFX:     return @"JSFX";
     }
     return @"";
 }
