@@ -55,7 +55,7 @@ public:
 
 private:
     AudioUnit _audio_unit;
-    ObjectId _processor_id;
+    [[maybe_unused]] ObjectId _processor_id;
     AUv2EditorResizeCallback _resize_callback;
     bool _is_open{false};
 

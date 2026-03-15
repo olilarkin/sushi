@@ -58,7 +58,7 @@ public:
 private:
     const clap_plugin_t* _plugin;
     const clap_plugin_gui_t* _gui;
-    ObjectId _processor_id;
+    [[maybe_unused]] ObjectId _processor_id;
     ClapEditorResizeCallback _resize_callback;
     bool _is_open{false};
 };
