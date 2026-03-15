@@ -1231,7 +1231,8 @@ grpc::Status AudioGraphControlService::CreateProcessorOnTrack(grpc::ServerContex
                                                          request->path(),
                                                          to_sushi_ext(request->type().type()),
                                                          request->track().id(),
-                                                         before_processor);
+                                                         before_processor,
+                                                         request->source_code());
     to_grpc(*response, status);
     return grpc::Status::OK;
 }
