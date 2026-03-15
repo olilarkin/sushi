@@ -206,6 +206,7 @@ set(ELKLOG_MULTITHREADED_RT_LOGGING OFF CACHE BOOL "")
 set(ELKLOG_FILE_SIZE 10000000 CACHE STRING "")
 set(ELKLOG_RT_MESSAGE_SIZE 2048 CACHE STRING "")
 set(ELKLOG_RT_QUEUE_SIZE 1024 CACHE STRING "")
+set(SPDLOG_SYSTEM_INCLUDES ON CACHE BOOL "Suppress warnings from spdlog headers" FORCE)
 
 add_subdirectory(elklog)
 
@@ -460,7 +461,7 @@ if (${SUSHI_WITH_CMAJOR})
 
     add_library(sushi_cmajor_runtime OBJECT ${CMAJOR_RUNTIME_SOURCES})
     target_compile_features(sushi_cmajor_runtime PRIVATE cxx_std_20)
-    target_include_directories(sushi_cmajor_runtime
+    target_include_directories(sushi_cmajor_runtime SYSTEM
         PUBLIC
             "${PROJECT_SOURCE_DIR}/third-party/cmajor/include"
             "${PROJECT_SOURCE_DIR}/third-party/cmajor/include/choc"
@@ -530,7 +531,7 @@ if (${SUSHI_WITH_JSFX})
         src/library/jsfx/jsfx_processor_factory.h
         src/library/jsfx/jsfx_processor_factory.cpp)
 
-    set(INCLUDE_DIRS ${INCLUDE_DIRS}
+    set(THIRD_PARTY_INCLUDE_DIRS ${THIRD_PARTY_INCLUDE_DIRS}
                      "${PROJECT_SOURCE_DIR}/third-party/libjsfx/include")
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} libjsfx_static)
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_JSFX)
@@ -597,7 +598,7 @@ if (${SUSHI_WITH_VST3})
         set_target_properties(vst3_host PROPERTIES COMPILE_FLAGS "-DDEVELOPMENT ${VST3_COMPILE_FLAGS}")
     endif()
 
-    target_include_directories(vst3_host PRIVATE "${PROJECT_SOURCE_DIR}/third-party/vst3sdk")
+    target_include_directories(vst3_host SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/third-party/vst3sdk")
     add_dependencies(vst3_host sdk)
 
     # Set sources
@@ -848,13 +849,18 @@ set_target_properties(${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 set(INCLUDE_DIRS ${INCLUDE_DIRS}
                  "${PROJECT_SOURCE_DIR}/src"
                  "${PROJECT_SOURCE_DIR}"
+)
+
+set(THIRD_PARTY_INCLUDE_DIRS
                  "${PROJECT_SOURCE_DIR}/third-party/vst3sdk"
                  "${PROJECT_SOURCE_DIR}/third-party/link/include"
                  "${PROJECT_SOURCE_DIR}/third-party/brickworks/include"
 )
 
-
 set(PUBLIC_INCLUDE_DIRS "${CMAKE_BINARY_DIR}" # for generated version.h
+)
+
+set(THIRD_PARTY_PUBLIC_INCLUDE_DIRS
                         "${PROJECT_SOURCE_DIR}/third-party/optionparser/"
                         "${PROJECT_SOURCE_DIR}/third-party/rapidjson/include")
 
@@ -891,6 +897,13 @@ target_include_directories(${PROJECT_NAME}
             ${PUBLIC_INCLUDE_DIRS}
             # where top-level project will look for the library's public headers
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+target_include_directories(${PROJECT_NAME} SYSTEM
+        PRIVATE
+            ${THIRD_PARTY_INCLUDE_DIRS}
+        PUBLIC
+            ${THIRD_PARTY_PUBLIC_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${EXTRA_BUILD_LIBRARIES} ${COMMON_LIBRARIES})
