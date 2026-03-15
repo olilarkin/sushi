@@ -58,7 +58,7 @@ public:
     Vst3xEditorHost(Steinberg::Vst::IEditController* controller, ObjectId processor_id,
                     EditorResizeCallback resize_callback);
 
-    ~Vst3xEditorHost();
+    virtual ~Vst3xEditorHost();
 
     std::pair<bool, EditorRect> open(void* parent_handle);
     void close();
