@@ -45,7 +45,8 @@ if [ ! -f "$BUILD_DIR/build.ninja" ]; then
         -DSUSHI_WITH_VST3=ON \
         -DSUSHI_WITH_CLAP=ON \
         -DSUSHI_WITH_AUV2=ON \
-        -DSUSHI_WITH_CMAJOR=ON
+        -DSUSHI_WITH_CMAJOR=ON \
+        -DSUSHI_WITH_JSFX=ON
 fi
 
 # Build
