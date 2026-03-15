@@ -308,8 +308,11 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
     _controller->subscribe_to_notifications(NotificationType::TRACK_UPDATE, _bridge.get());
     _controller->subscribe_to_notifications(NotificationType::PROCESSOR_UPDATE, _bridge.get());
 
-    // Enable timing stats so we get CPU notifications
-    _controller->timing_controller()->set_timing_statistics_enabled(true);
+    // Enable timing stats after a delay to let audio stabilize
+    auto* timingCtrl = _controller->timing_controller();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        timingCtrl->set_timing_statistics_enabled(true);
+    });
 
 #ifdef SUSHI_BUILD_WITH_NODE_GRAPH_VIEW
     // Audio graph bridge for SwiftUI viewer
@@ -370,7 +373,9 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
 - (void)handleCpuTimingsAvg:(float)avg min:(float)min max:(float)max
 {
-    _cpuTimings = {avg, min, max};
+    _cpuTimings = {std::min(avg * 100.0f, 100.0f),
+                   std::min(min * 100.0f, 100.0f),
+                   std::min(max * 100.0f, 100.0f)};
     [self updateButtonTitle];
 }
 
