@@ -358,6 +358,11 @@ ProcessorState JsfxWrapper::save_state() const
     return state;
 }
 
+bool JsfxWrapper::has_editor() const
+{
+    return _effect && libjsfx_has_gfx(_effect) == 1;
+}
+
 PluginInfo JsfxWrapper::info() const
 {
     return _plugin_info;

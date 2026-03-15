@@ -38,9 +38,33 @@
 #include "library/cmajor/cmajor_wrapper.h"
 #endif
 
-#if defined(__APPLE__) && (defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || defined(SUSHI_BUILD_WITH_CMAJOR))
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+#include "library/jsfx/jsfx_wrapper.h"
+#endif
+
+#if defined(__APPLE__) && (defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || defined(SUSHI_BUILD_WITH_CMAJOR) || defined(SUSHI_BUILD_WITH_JSFX))
 #include <dispatch/dispatch.h>
 #include <pthread.h>
+
+// Run a callable on the main thread. If already on the main thread, call directly
+// to avoid deadlocking dispatch_sync(main_queue).
+template<typename F>
+auto run_on_main_thread(F&& func) -> decltype(func())
+{
+    if (pthread_main_np())
+    {
+        return func();
+    }
+    else
+    {
+        using R = decltype(func());
+        __block R result;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = func();
+        });
+        return result;
+    }
+}
 #endif
 
 ELKLOG_GET_LOGGER_WITH_MODULE_NAME("controller");
@@ -54,7 +78,7 @@ EditorController::EditorController(const BaseProcessorContainer* processors)
 
 EditorController::~EditorController()
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     auto cleanup = [this]() {
         std::lock_guard<std::mutex> lock(_mutex);
 #ifdef SUSHI_BUILD_WITH_VST3
@@ -68,6 +92,9 @@ EditorController::~EditorController()
 #endif
 #if defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)
         _cmajor_editors.clear();
+#endif
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+        _jsfx_editors.clear();
 #endif
         _windows.clear();
     };
@@ -102,7 +129,7 @@ std::pair<control::ControlStatus, bool> EditorController::has_editor(int process
 std::pair<control::ControlStatus, control::EditorRect> EditorController::open_editor(int processor_id,
                                                                                      void* parent_handle)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     ELKLOG_LOG_DEBUG("open_editor called for processor {}", processor_id);
 
     auto processor = _processors->mutable_processor(static_cast<ObjectId>(processor_id));
@@ -147,11 +174,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -190,11 +213,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -232,11 +251,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -273,11 +288,41 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
+    }
+#endif
+
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+    if (plugin_type == PluginType::JSFX)
+    {
+        auto* jsfx_wrap = static_cast<jsfx_wrapper::JsfxWrapper*>(processor.get());
+
+        auto do_open = [&]() -> std::pair<control::ControlStatus, control::EditorRect> {
+            std::lock_guard<std::mutex> lock(_mutex);
+
+            auto id = static_cast<ObjectId>(processor_id);
+            auto it = _jsfx_editors.find(id);
+            if (it != _jsfx_editors.end() && it->second->is_open())
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            auto editor_host = std::make_unique<jsfx_wrapper::JsfxEditorHost>(
+                jsfx_wrap->effect(),
+                id,
+                _resize_callback);
+
+            auto [success, rect] = editor_host->open(parent_handle);
+            if (!success)
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            _jsfx_editors[id] = std::move(editor_host);
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
+        };
+
+        return run_on_main_thread(do_open);
     }
 #endif
 
@@ -292,7 +337,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
 
 std::pair<control::ControlStatus, control::EditorRect> EditorController::open_editor(int processor_id)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     ELKLOG_LOG_DEBUG("open_editor (managed window) called for processor {}", processor_id);
 
     auto processor = _processors->mutable_processor(static_cast<ObjectId>(processor_id));
@@ -380,11 +425,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -447,11 +488,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -513,11 +550,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
         };
 
 #ifdef __APPLE__
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
 #else
         return do_open();
 #endif
@@ -603,11 +636,65 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-        __block std::pair<control::ControlStatus, control::EditorRect> result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = do_open();
-        });
-        return result;
+        return run_on_main_thread(do_open);
+    }
+#endif
+
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+    if (plugin_type == PluginType::JSFX)
+    {
+        auto* jsfx_wrap = static_cast<jsfx_wrapper::JsfxWrapper*>(processor.get());
+
+        auto do_open = [&]() -> std::pair<control::ControlStatus, control::EditorRect> {
+            std::lock_guard<std::mutex> lock(_mutex);
+
+            auto id = static_cast<ObjectId>(processor_id);
+            auto it = _jsfx_editors.find(id);
+            if (it != _jsfx_editors.end() && it->second->is_open())
+            {
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            ELKLOG_LOG_DEBUG("Creating PluginWindow for JSFX processor {}", processor_id);
+            auto window = std::make_unique<vst3::PluginWindow>();
+            auto* native_view = window->create(proc_name, 640, 480);
+            if (!native_view)
+            {
+                ELKLOG_LOG_ERROR("Failed to create native window for processor {}", processor_id);
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+
+            auto editor_host = std::make_unique<jsfx_wrapper::JsfxEditorHost>(
+                jsfx_wrap->effect(),
+                id,
+                _resize_callback);
+
+            auto [success, rect] = editor_host->open(native_view);
+            if (!success)
+            {
+                ELKLOG_LOG_ERROR("JSFX editor open failed for processor {}", processor_id);
+                window->close();
+                return {control::ControlStatus::ERROR, {0, 0}};
+            }
+            ELKLOG_LOG_DEBUG("JSFX editor opened: {}x{}", rect.width, rect.height);
+
+            window->resize(rect.width, rect.height);
+
+            auto saved_it = _saved_frames.find(id);
+            if (saved_it != _saved_frames.end())
+            {
+                window->set_position(saved_it->second.x, saved_it->second.y);
+            }
+
+            window->show();
+
+            _jsfx_editors[id] = std::move(editor_host);
+            _windows[id] = std::move(window);
+
+            return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
+        };
+
+        return run_on_main_thread(do_open);
     }
 #endif
 
@@ -622,7 +709,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
 
 control::ControlStatus EditorController::close_editor(int processor_id)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     ELKLOG_LOG_DEBUG("close_editor called for processor {}", processor_id);
 
     auto do_close = [&]() -> control::ControlStatus {
@@ -687,15 +774,22 @@ control::ControlStatus EditorController::close_editor(int processor_id)
         }
 #endif
 
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+        auto jsfx_it = _jsfx_editors.find(id);
+        if (jsfx_it != _jsfx_editors.end())
+        {
+            jsfx_it->second->close();
+            _jsfx_editors.erase(jsfx_it);
+            _save_window_frame(id);
+            return control::ControlStatus::OK;
+        }
+#endif
+
         return control::ControlStatus::NOT_FOUND;
     };
 
 #ifdef __APPLE__
-    __block control::ControlStatus result;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        result = do_close();
-    });
-    return result;
+    return run_on_main_thread(do_close);
 #else
     return do_close();
 #endif
@@ -707,7 +801,7 @@ control::ControlStatus EditorController::close_editor(int processor_id)
 
 std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int processor_id) const
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     std::lock_guard<std::mutex> lock(_mutex);
 
     auto id = static_cast<ObjectId>(processor_id);
@@ -744,6 +838,14 @@ std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int pro
     }
 #endif
 
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+    auto jsfx_it = _jsfx_editors.find(id);
+    if (jsfx_it != _jsfx_editors.end())
+    {
+        return {control::ControlStatus::OK, jsfx_it->second->is_open()};
+    }
+#endif
+
     return {control::ControlStatus::OK, false};
 #else
     (void)processor_id;
@@ -753,7 +855,7 @@ std::pair<control::ControlStatus, bool> EditorController::is_editor_open(int pro
 
 void EditorController::set_resize_callback(control::EditorResizeCallback callback)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     std::lock_guard<std::mutex> lock(_mutex);
     _resize_callback = std::move(callback);
 #else
@@ -786,7 +888,7 @@ control::ControlStatus EditorController::set_content_scale_factor(int processor_
 
 std::pair<control::ControlStatus, control::EditorRect> EditorController::get_editor_info(int processor_id) const
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     std::lock_guard<std::mutex> lock(_mutex);
 
     auto id = static_cast<ObjectId>(processor_id);
@@ -816,7 +918,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::get_edi
 
 control::ControlStatus EditorController::set_editor_position(int processor_id, int x, int y)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     auto do_set = [&]() -> control::ControlStatus {
         std::lock_guard<std::mutex> lock(_mutex);
 
@@ -845,11 +947,7 @@ control::ControlStatus EditorController::set_editor_position(int processor_id, i
     };
 
 #ifdef __APPLE__
-    __block control::ControlStatus result;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        result = do_set();
-    });
-    return result;
+    return run_on_main_thread(do_set);
 #else
     return do_set();
 #endif
@@ -863,7 +961,7 @@ control::ControlStatus EditorController::set_editor_position(int processor_id, i
 
 control::ControlStatus EditorController::capture_editor_screenshot(int processor_id, const std::string& output_path, int max_width, int max_height)
 {
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     auto do_capture = [&]() -> control::ControlStatus {
         std::lock_guard<std::mutex> lock(_mutex);
 
@@ -879,11 +977,7 @@ control::ControlStatus EditorController::capture_editor_screenshot(int processor
     };
 
 #ifdef __APPLE__
-    __block control::ControlStatus result;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        result = do_capture();
-    });
-    return result;
+    return run_on_main_thread(do_capture);
 #else
     return do_capture();
 #endif

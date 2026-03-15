@@ -424,7 +424,7 @@ if (${SUSHI_WITH_AUV2})
         PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 endif()
 
-if (${SUSHI_WITH_VST3} OR ${SUSHI_WITH_CLAP} OR ${SUSHI_WITH_AUV2} OR ${SUSHI_WITH_CMAJOR})
+if (${SUSHI_WITH_VST3} OR ${SUSHI_WITH_CLAP} OR ${SUSHI_WITH_AUV2} OR ${SUSHI_WITH_CMAJOR} OR ${SUSHI_WITH_JSFX})
     set(ADDITIONAL_EDITOR_WINDOW_SOURCES
         src/library/vst3x/vst3x_plugin_window.h)
 
@@ -523,6 +523,9 @@ if (${SUSHI_WITH_JSFX})
 
     set(LIBJSFX_BUILD_SHARED OFF CACHE BOOL "" FORCE)
     set(LIBJSFX_BUILD_CLI OFF CACHE BOOL "" FORCE)
+    if(APPLE)
+        set(LIBJSFX_ENABLE_GFX ON CACHE BOOL "" FORCE)
+    endif()
     add_subdirectory(third-party/libjsfx EXCLUDE_FROM_ALL)
 
     set(ADDITIONAL_JSFX_SOURCES
@@ -530,6 +533,14 @@ if (${SUSHI_WITH_JSFX})
         src/library/jsfx/jsfx_wrapper.cpp
         src/library/jsfx/jsfx_processor_factory.h
         src/library/jsfx/jsfx_processor_factory.cpp)
+
+    if(APPLE)
+        list(APPEND ADDITIONAL_JSFX_SOURCES
+            src/library/jsfx/jsfx_editor_host.h
+            src/library/jsfx/jsfx_editor_host.mm)
+        set_source_files_properties(src/library/jsfx/jsfx_editor_host.mm
+            PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    endif()
 
     set(THIRD_PARTY_INCLUDE_DIRS ${THIRD_PARTY_INCLUDE_DIRS}
                      "${PROJECT_SOURCE_DIR}/third-party/libjsfx/include")

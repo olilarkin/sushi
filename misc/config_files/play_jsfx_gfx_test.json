@@ -1,0 +1,30 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "name" : "gfx_test",
+                    "type" : "jsfx",
+                    "source_code" : "desc:GFX Test - VU Meter\nslider1:0<-60,12,0.1>Gain (dB)\n\n@slider\ngain = 10^(slider1/20);\n\n@sample\nspl0 *= gain;\nspl1 *= gain;\npeak_l = max(peak_l, abs(spl0));\npeak_r = max(peak_r, abs(spl1));\n\n@gfx 400 300\ngfx_clear = 0x1a1a2e;\n\n// Title\ngfx_r = 0.9; gfx_g = 0.9; gfx_b = 0.95; gfx_a = 1;\ngfx_x = 10; gfx_y = 10;\ngfx_drawstr(\"JSFX GFX Test - VU Meter\");\n\n// Meter background\ngfx_r = 0.15; gfx_g = 0.15; gfx_b = 0.2;\ngfx_rect(30, 50, 340, 30);\ngfx_rect(30, 100, 340, 30);\n\n// Meter fill - left\nbar_l = min(peak_l * 340, 340);\nbar_l > 300 ? (gfx_r = 1; gfx_g = 0.2; gfx_b = 0.2) :\nbar_l > 240 ? (gfx_r = 1; gfx_g = 0.8; gfx_b = 0.2) :\n(gfx_r = 0.2; gfx_g = 0.8; gfx_b = 0.4);\ngfx_rect(30, 50, bar_l, 30);\n\n// Meter fill - right\nbar_r = min(peak_r * 340, 340);\nbar_r > 300 ? (gfx_r = 1; gfx_g = 0.2; gfx_b = 0.2) :\nbar_r > 240 ? (gfx_r = 1; gfx_g = 0.8; gfx_b = 0.2) :\n(gfx_r = 0.2; gfx_g = 0.8; gfx_b = 0.4);\ngfx_rect(30, 100, bar_r, 30);\n\n// Labels\ngfx_r = 0.7; gfx_g = 0.7; gfx_b = 0.75;\ngfx_x = 30; gfx_y = 35;\ngfx_drawstr(\"L\");\ngfx_x = 30; gfx_y = 85;\ngfx_drawstr(\"R\");\n\n// Slider value display\ngfx_x = 30; gfx_y = 150;\ngfx_r = 0.9; gfx_g = 0.9; gfx_b = 0.95;\ngfx_printf(\"Gain: %.1f dB\", slider1);\n\n// Mouse position display\ngfx_x = 30; gfx_y = 180;\ngfx_printf(\"Mouse: %d, %d\", mouse_x, mouse_y);\n\n// Mouse button indicator\nmouse_cap & 1 ? (\n  gfx_r = 0.2; gfx_g = 0.8; gfx_b = 1;\n  gfx_circle(mouse_x, mouse_y, 10, 1);\n);\n\n// Decay peaks\npeak_l *= 0.95;\npeak_r *= 0.95;\n"
+                }
+            ]
+        }
+    ]
+}
