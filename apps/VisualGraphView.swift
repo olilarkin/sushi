@@ -222,7 +222,7 @@ private func computeLayout(model: NodeGraphModel) -> GraphLayout
     }
 
     var maxX: CGFloat = 400
-    var maxY: CGFloat = currentY + Layout.canvasPadding
+    let maxY: CGFloat = currentY + Layout.canvasPadding
     for tl in trackLayouts
     {
         maxX = max(maxX, tl.boundingBox.maxX + Layout.canvasPadding)
@@ -330,7 +330,7 @@ struct VisualGraphView: View
             .frame(width: layout.totalSize.width, height: layout.totalSize.height)
             .coordinateSpace(name: "canvas")
         }
-        .onChange(of: model.tracks.map({ $0.id })) { _ in
+        .onChange(of: model.tracks.map({ $0.id })) {
             textCache.clear()
         }
     }
@@ -650,7 +650,7 @@ private struct MixerOverlay: View
                     .frame(width: 40, alignment: .trailing)
                 Slider(value: $gainDb, in: -120...24, step: 0.1)
                     .controlSize(.mini)
-                    .onChange(of: gainDb) { newValue in
+                    .onChange(of: gainDb) { _, newValue in
                         model.setGain(newValue, forTrackId: trackId)
                     }
             }
@@ -665,7 +665,7 @@ private struct MixerOverlay: View
                         .frame(width: 40, alignment: .trailing)
                     Slider(value: $pan, in: -1...1, step: 0.01)
                         .controlSize(.mini)
-                        .onChange(of: pan) { newValue in
+                        .onChange(of: pan) { _, newValue in
                             model.setPan(newValue, forTrackId: trackId)
                         }
                 }
@@ -674,7 +674,7 @@ private struct MixerOverlay: View
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .onAppear { syncFromModel() }
-        .onChange(of: model.tracks) { _ in syncFromModel() }
+        .onChange(of: model.tracks) { syncFromModel() }
     }
 
     private func syncFromModel()

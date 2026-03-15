@@ -135,7 +135,7 @@ private struct TrackMixerControls: View
                 {
                     Text("Gain")
                 }
-                .onChange(of: gainDb) { newValue in
+                .onChange(of: gainDb) { _, newValue in
                     model.setGain(newValue, forTrackId: track.id)
                 }
             }
@@ -155,7 +155,7 @@ private struct TrackMixerControls: View
                     {
                         Text("Pan")
                     }
-                    .onChange(of: pan) { newValue in
+                    .onChange(of: pan) { _, newValue in
                         model.setPan(newValue, forTrackId: track.id)
                     }
                 }
