@@ -44,7 +44,9 @@ public:
     ProcessorReturnCode set_state(ProcessorState* state, bool realtime_running) override;
     ProcessorState save_state() const override;
     PluginInfo info() const override;
-    bool has_editor() const override { return false; }
+    bool has_editor() const override;
+
+    libjsfx_effect_t* effect() const { return _effect; }
 
 private:
     void _register_parameters();

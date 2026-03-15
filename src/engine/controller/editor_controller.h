@@ -49,6 +49,11 @@
 #include "library/vst3x/vst3x_plugin_window.h"
 #endif
 
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+#include "library/jsfx/jsfx_editor_host.h"
+#include "library/vst3x/vst3x_plugin_window.h"
+#endif
+
 namespace sushi::internal::engine::controller_impl {
 
 class EditorController : public control::EditorController
@@ -81,7 +86,7 @@ public:
 private:
     const BaseProcessorContainer* _processors;
 
-#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
     std::unordered_map<ObjectId, std::unique_ptr<vst3::PluginWindow>> _windows;
     std::unordered_map<ObjectId, control::EditorRect> _saved_frames;
     control::EditorResizeCallback _resize_callback;
@@ -102,6 +107,10 @@ private:
 
 #if defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)
     std::unordered_map<ObjectId, std::unique_ptr<cmajor_plugin::CmajorEditorHost>> _cmajor_editors;
+#endif
+
+#if defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__)
+    std::unordered_map<ObjectId, std::unique_ptr<jsfx_wrapper::JsfxEditorHost>> _jsfx_editors;
 #endif
 };
 
