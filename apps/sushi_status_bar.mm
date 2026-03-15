@@ -185,6 +185,7 @@ static NSString* plugin_type_badge_string(PluginType type)
         case PluginType::AUV2:     return @"AUV2";
         case PluginType::CMAJOR:   return @"CMAJ";
         case PluginType::JSFX:     return @"JSFX";
+        case PluginType::FAUST:    return @"FAUST";
     }
     return nil;
 }

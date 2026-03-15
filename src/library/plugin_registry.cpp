@@ -30,6 +30,9 @@
 #ifdef SUSHI_BUILD_WITH_JSFX
 #include "jsfx/jsfx_processor_factory.h"
 #endif
+#ifdef SUSHI_BUILD_WITH_FAUST
+#include "faust/faust_processor_factory.h"
+#endif
 #include "lv2/lv2_processor_factory.h"
 
 namespace sushi::internal {
@@ -91,6 +94,16 @@ PluginRegistry::new_instance(const PluginInfo& plugin_info,
             {
 #ifdef SUSHI_BUILD_WITH_JSFX
                 std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<jsfx_wrapper::JsfxProcessorFactory>();
+                _factories[plugin_info.type] = std::move(new_factory);
+                break;
+#else
+                return {ProcessorReturnCode::PLUGIN_LOAD_ERROR, nullptr};
+#endif
+            }
+            case PluginType::FAUST:
+            {
+#ifdef SUSHI_BUILD_WITH_FAUST
+                std::unique_ptr<BaseProcessorFactory> new_factory = std::make_unique<faust_wrapper::FaustProcessorFactory>();
                 _factories[plugin_info.type] = std::move(new_factory);
                 break;
 #else

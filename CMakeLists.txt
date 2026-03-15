@@ -57,6 +57,7 @@ set(SUSHI_WITH_CLAP_DEFAULT OFF)
 set(SUSHI_WITH_AUV2_DEFAULT OFF)
 set(SUSHI_WITH_CMAJOR_DEFAULT OFF)
 set(SUSHI_WITH_JSFX_DEFAULT OFF)
+set(SUSHI_WITH_FAUST_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -141,6 +142,7 @@ option(SUSHI_WITH_CLAP "Enable CLAP support" ${SUSHI_WITH_CLAP_DEFAULT})
 option(SUSHI_WITH_AUV2 "Enable Audio Unit V2 support" ${SUSHI_WITH_AUV2_DEFAULT})
 option(SUSHI_WITH_CMAJOR "Enable Cmajor support" ${SUSHI_WITH_CMAJOR_DEFAULT})
 option(SUSHI_WITH_JSFX "Enable JSFX support" ${SUSHI_WITH_JSFX_DEFAULT})
+option(SUSHI_WITH_FAUST "Enable Faust DSP support" ${SUSHI_WITH_FAUST_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -548,6 +550,38 @@ if (${SUSHI_WITH_JSFX})
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_JSFX)
 endif()
 
+#################
+# Faust setup   #
+#################
+
+if (${SUSHI_WITH_FAUST})
+    message("Building with Faust support.")
+
+    set(INCLUDE_EXECUTABLE OFF CACHE BOOL "" FORCE)
+    set(INCLUDE_STATIC OFF CACHE BOOL "" FORCE)
+    set(INCLUDE_DYNAMIC ON CACHE BOOL "" FORCE)
+    set(INCLUDE_OSC OFF CACHE BOOL "" FORCE)
+    set(INCLUDE_HTTP OFF CACHE BOOL "" FORCE)
+    set(INCLUDE_EMCC OFF CACHE BOOL "" FORCE)
+    set(INCLUDE_WASM_GLUE OFF CACHE BOOL "" FORCE)
+    set(SELF_CONTAINED_LIBRARY ON CACHE BOOL "" FORCE)
+
+    include(third-party/faust/build/backends/interp.cmake)
+    add_subdirectory(third-party/faust/build EXCLUDE_FROM_ALL)
+
+    set(ADDITIONAL_FAUST_SOURCES
+        src/library/faust/faust_wrapper.h
+        src/library/faust/faust_wrapper.cpp
+        src/library/faust/faust_ui.h
+        src/library/faust/faust_processor_factory.h
+        src/library/faust/faust_processor_factory.cpp)
+
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} dynamiclib)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS}
+        -DSUSHI_BUILD_WITH_FAUST
+        -DFAUST_LIBRARIES_DIR="${PROJECT_SOURCE_DIR}/third-party/faust/libraries")
+endif()
+
 ###############
 # VST 3 setup #
 ###############
@@ -847,6 +881,7 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_AUV2_SOURCES}"
                                    "${ADDITIONAL_CMAJOR_SOURCES}"
                                    "${ADDITIONAL_JSFX_SOURCES}"
+                                   "${ADDITIONAL_FAUST_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
                                    "${ADDITIONAL_CMAJOR_OBJECTS}"
                                    "${MIDI_SOURCES}")
@@ -867,6 +902,11 @@ set(THIRD_PARTY_INCLUDE_DIRS
                  "${PROJECT_SOURCE_DIR}/third-party/link/include"
                  "${PROJECT_SOURCE_DIR}/third-party/brickworks/include"
 )
+
+if (${SUSHI_WITH_FAUST})
+    set(THIRD_PARTY_INCLUDE_DIRS ${THIRD_PARTY_INCLUDE_DIRS}
+        "${PROJECT_SOURCE_DIR}/third-party/faust/architecture")
+endif()
 
 set(PUBLIC_INCLUDE_DIRS "${CMAKE_BINARY_DIR}" # for generated version.h
 )
