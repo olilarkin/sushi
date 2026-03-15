@@ -16,6 +16,7 @@
 #include "faust_wrapper.h"
 
 #include "faust/dsp/interpreter-dsp.h"
+#include "faust/gui/JSONUI.h"
 
 #include "elklog/static_logger.h"
 
@@ -216,7 +217,7 @@ std::pair<ProcessorReturnCode, std::string> FaustWrapper::property_value(ObjectI
 
 bool FaustWrapper::_compile(const std::string& source, bool is_file)
 {
-    std::lock_guard<std::mutex> lock(_compile_lock);
+    std::unique_lock<std::mutex> lock(_compile_lock);
 
     std::string error_msg;
     interpreter_dsp_factory* factory = nullptr;
@@ -285,17 +286,60 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
 
     // Swap in the new runtime
     auto* old_runtime = _runtime.exchange(new_runtime, std::memory_order_acq_rel);
-    if (old_runtime)
-    {
-        _delete_runtime(old_runtime);
-    }
 
     _compile_status = "ok";
     _build_log.clear();
     ELKLOG_LOG_INFO("Faust DSP compiled successfully ({} inputs, {} outputs, {} parameters)",
                     dsp->getNumInputs(), dsp->getNumOutputs(), new_runtime->parameters.size());
 
+    // Copy callback and release lock before invoking — the callback may call ui_json()
+    // which also takes _compile_lock
+    auto recompile_cb = _editor_recompile_callback;
+    lock.unlock();
+
+    // Invoke recompile callback before deleting old runtime so zone pointers remain valid
+    // until the editor has rebound to the new ones
+    if (recompile_cb)
+    {
+        recompile_cb();
+    }
+
+    if (old_runtime)
+    {
+        _delete_runtime(old_runtime);
+    }
+
     return true;
+}
+
+std::string FaustWrapper::ui_json() const
+{
+    std::lock_guard<std::mutex> lock(_compile_lock);
+    auto* rt = _runtime.load(std::memory_order_acquire);
+    if (!rt || !rt->dsp)
+    {
+        return {};
+    }
+
+    JSONUI jsonui;
+    rt->dsp->buildUserInterface(&jsonui);
+    return jsonui.JSON();
+}
+
+const std::vector<FaustParameterInfo>& FaustWrapper::current_parameters() const
+{
+    static const std::vector<FaustParameterInfo> empty;
+    auto* rt = _runtime.load(std::memory_order_acquire);
+    if (!rt)
+    {
+        return empty;
+    }
+    return rt->parameters;
+}
+
+void FaustWrapper::set_editor_recompile_callback(EditorRecompileCallback callback)
+{
+    _editor_recompile_callback = std::move(callback);
 }
 
 void FaustWrapper::_register_parameters(const std::vector<FaustParameterInfo>& params)

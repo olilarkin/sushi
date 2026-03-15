@@ -576,6 +576,57 @@ if (${SUSHI_WITH_FAUST})
         src/library/faust/faust_processor_factory.h
         src/library/faust/faust_processor_factory.cpp)
 
+    if (APPLE)
+        # Build FaustSwiftUI + bridging Swift as a static library via swiftc
+        # (CMake's Swift support requires the Xcode generator, so we invoke swiftc directly)
+        file(GLOB FAUST_SWIFTUI_SWIFT_SOURCES
+            "${PROJECT_SOURCE_DIR}/third-party/FaustSwiftUI/Sources/*.swift")
+        set(FAUST_EDITOR_SWIFT_SOURCE
+            "${PROJECT_SOURCE_DIR}/src/library/faust/FaustEditorSwift.swift")
+        set(FAUST_SWIFT_LIB "${CMAKE_BINARY_DIR}/libFaustSwiftUI.a")
+        set(FAUST_SWIFT_HEADER "${CMAKE_BINARY_DIR}/FaustSwiftUI-Swift.h")
+        set(FAUST_SWIFT_MODULE_DIR "${CMAKE_BINARY_DIR}/FaustSwiftUIModules")
+
+        # Determine target triple for swiftc
+        if (CMAKE_OSX_ARCHITECTURES)
+            set(FAUST_SWIFT_ARCH ${CMAKE_OSX_ARCHITECTURES})
+        else()
+            execute_process(COMMAND uname -m OUTPUT_VARIABLE FAUST_SWIFT_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+        endif()
+
+        add_custom_command(
+            OUTPUT ${FAUST_SWIFT_LIB} ${FAUST_SWIFT_HEADER}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${FAUST_SWIFT_MODULE_DIR}
+            COMMAND swiftc
+                -emit-library -static
+                -emit-objc-header -emit-objc-header-path ${FAUST_SWIFT_HEADER}
+                -module-name FaustSwiftUI
+                -emit-module -emit-module-path ${FAUST_SWIFT_MODULE_DIR}/FaustSwiftUI.swiftmodule
+                -I ${FAUST_SWIFT_MODULE_DIR}
+                -sdk ${CMAKE_OSX_SYSROOT}
+                -target ${FAUST_SWIFT_ARCH}-apple-macosx${CMAKE_OSX_DEPLOYMENT_TARGET}
+                -O
+                -o ${FAUST_SWIFT_LIB}
+                ${FAUST_SWIFTUI_SWIFT_SOURCES}
+                ${FAUST_EDITOR_SWIFT_SOURCE}
+            DEPENDS ${FAUST_SWIFTUI_SWIFT_SOURCES} ${FAUST_EDITOR_SWIFT_SOURCE}
+            COMMENT "Building FaustSwiftUI Swift library"
+            VERBATIM
+        )
+
+        add_custom_target(FaustSwiftUI_build DEPENDS ${FAUST_SWIFT_LIB} ${FAUST_SWIFT_HEADER})
+
+        add_library(FaustSwiftUI STATIC IMPORTED GLOBAL)
+        set_target_properties(FaustSwiftUI PROPERTIES IMPORTED_LOCATION ${FAUST_SWIFT_LIB})
+        add_dependencies(FaustSwiftUI FaustSwiftUI_build)
+
+        list(APPEND ADDITIONAL_FAUST_SOURCES
+            src/library/faust/faust_editor_host.h
+            src/library/faust/faust_editor_host.mm)
+
+        set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} FaustSwiftUI)
+    endif()
+
     set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} dynamiclib)
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS}
         -DSUSHI_BUILD_WITH_FAUST

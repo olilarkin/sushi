@@ -16,6 +16,7 @@
 #ifndef SUSHI_FAUST_WRAPPER_H
 #define SUSHI_FAUST_WRAPPER_H
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -45,8 +46,18 @@ public:
     void process_event(const RtEvent& event) override;
     void process_audio(const ChunkSampleBuffer& in_buffer, ChunkSampleBuffer& out_buffer) override;
 
+    using EditorRecompileCallback = std::function<void()>;
+
     PluginInfo info() const override;
+#if defined(SUSHI_BUILD_WITH_FAUST) && defined(__APPLE__)
+    bool has_editor() const override { return true; }
+#else
     bool has_editor() const override { return false; }
+#endif
+
+    std::string ui_json() const;
+    const std::vector<FaustParameterInfo>& current_parameters() const;
+    void set_editor_recompile_callback(EditorRecompileCallback callback);
 
     ProcessorReturnCode set_property_value(ObjectId property_id, const std::string& value) override;
     std::pair<ProcessorReturnCode, std::string> property_value(ObjectId property_id) const override;
@@ -69,13 +80,14 @@ private:
     PluginInfo _plugin_info;
     float _sample_rate {44100.0f};
     std::atomic<Runtime*> _runtime {nullptr};
-    std::mutex _compile_lock;
+    mutable std::mutex _compile_lock;
 
     std::string _source_code;
     std::string _source_path;
     std::string _compile_status {"uncompiled"};
     std::string _build_log;
     std::string _faust_libraries_dir;
+    EditorRecompileCallback _editor_recompile_callback;
 };
 
 } // namespace sushi::internal::faust_wrapper
