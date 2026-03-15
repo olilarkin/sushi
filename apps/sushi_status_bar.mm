@@ -576,7 +576,9 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
     if (event.type == NSEventTypeRightMouseUp ||
         (event.modifierFlags & NSEventModifierFlagControl))
     {
-        [_statusItem popUpStatusItemMenu:_menu];
+        _statusItem.menu = _menu;
+        [_statusItem.button performClick:nil];
+        _statusItem.menu = nil;
     }
     else
     {
