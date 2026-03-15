@@ -42,7 +42,8 @@
 #include "library/jsfx/jsfx_wrapper.h"
 #endif
 
-#if defined(__APPLE__) && (defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || defined(SUSHI_BUILD_WITH_CMAJOR) || defined(SUSHI_BUILD_WITH_JSFX))
+#if defined(SUSHI_BUILD_WITH_VST3) || defined(SUSHI_BUILD_WITH_CLAP) || defined(SUSHI_BUILD_WITH_AUV2) || (defined(SUSHI_BUILD_WITH_CMAJOR) && defined(__APPLE__)) || (defined(SUSHI_BUILD_WITH_JSFX) && defined(__APPLE__))
+#ifdef __APPLE__
 #include <dispatch/dispatch.h>
 #include <pthread.h>
 
@@ -65,6 +66,13 @@ auto run_on_main_thread(F&& func) -> decltype(func())
         return result;
     }
 }
+#else
+template<typename F>
+auto run_on_main_thread(F&& func) -> decltype(func())
+{
+    return func();
+}
+#endif
 #endif
 
 ELKLOG_GET_LOGGER_WITH_MODULE_NAME("controller");
@@ -173,11 +181,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -212,11 +216,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -250,11 +250,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -424,11 +420,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -487,11 +479,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -549,11 +537,7 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };
 
-#ifdef __APPLE__
         return run_on_main_thread(do_open);
-#else
-        return do_open();
-#endif
     }
 #endif
 
@@ -788,11 +772,7 @@ control::ControlStatus EditorController::close_editor(int processor_id)
         return control::ControlStatus::NOT_FOUND;
     };
 
-#ifdef __APPLE__
     return run_on_main_thread(do_close);
-#else
-    return do_close();
-#endif
 #else
     (void)processor_id;
     return control::ControlStatus::UNSUPPORTED_OPERATION;
@@ -946,11 +926,7 @@ control::ControlStatus EditorController::set_editor_position(int processor_id, i
         return control::ControlStatus::OK;
     };
 
-#ifdef __APPLE__
     return run_on_main_thread(do_set);
-#else
-    return do_set();
-#endif
 #else
     (void)processor_id;
     (void)x;
@@ -976,11 +952,7 @@ control::ControlStatus EditorController::capture_editor_screenshot(int processor
         return success ? control::ControlStatus::OK : control::ControlStatus::ERROR;
     };
 
-#ifdef __APPLE__
     return run_on_main_thread(do_capture);
-#else
-    return do_capture();
-#endif
 #else
     (void)processor_id;
     (void)output_path;
