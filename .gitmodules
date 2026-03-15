@@ -44,3 +44,6 @@
 [submodule "third-party/cmajor"]
 	path = third-party/cmajor
 	url = https://github.com/cmajor-lang/cmajor
+[submodule "third-party/faust"]
+	path = third-party/faust
+	url = https://github.com/grame-cncm/faust.git

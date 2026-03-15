@@ -62,7 +62,8 @@ enum class PluginType
     LV2,
     AUV2,
     CMAJOR,
-    JSFX
+    JSFX,
+    FAUST
 };
 
 /**
