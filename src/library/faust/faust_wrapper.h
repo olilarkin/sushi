@@ -65,6 +65,11 @@ public:
     const std::vector<FaustParameterInfo>& current_parameters() const;
     void set_editor_recompile_callback(EditorRecompileCallback callback);
 
+    std::pair<ProcessorReturnCode, float> parameter_value(ObjectId parameter_id) const override;
+    std::pair<ProcessorReturnCode, float> parameter_value_in_domain(ObjectId parameter_id) const override;
+    std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id) const override;
+    std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id, float normalized_value) const override;
+
     ProcessorReturnCode set_property_value(ObjectId property_id, const std::string& value) override;
     std::pair<ProcessorReturnCode, std::string> property_value(ObjectId property_id) const override;
 
@@ -76,6 +81,7 @@ private:
         FaustBackend backend {FaustBackend::INTERPRETER};
         std::vector<FaustParameterInfo> parameters;
         std::vector<FAUSTFLOAT*> zones;
+        std::vector<std::map<int, std::string>> menu_labels;
     };
 
     bool _compile(const std::string& source, bool is_file);

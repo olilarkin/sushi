@@ -23,11 +23,85 @@
 
 #include "elklog/static_logger.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <map>
+
 namespace sushi::internal::faust_wrapper {
 
 namespace {
 
 ELKLOG_GET_LOGGER_WITH_MODULE_NAME("faust");
+
+// Parse Faust menu metadata: "menu{'label0':0;'label1':1}" or "menu{label0:0;label1:1}"
+std::map<int, std::string> parse_menu_style(const std::string& style)
+{
+    std::map<int, std::string> labels;
+    auto brace_start = style.find('{');
+    auto brace_end = style.rfind('}');
+    if (brace_start == std::string::npos || brace_end == std::string::npos)
+        return labels;
+
+    std::string content = style.substr(brace_start + 1, brace_end - brace_start - 1);
+
+    size_t pos = 0;
+    while (pos < content.size())
+    {
+        // Skip whitespace
+        while (pos < content.size() && content[pos] == ' ') pos++;
+
+        // Skip optional quote
+        bool quoted = (pos < content.size() && content[pos] == '\'');
+        if (quoted) pos++;
+
+        // Read label
+        size_t label_start = pos;
+        size_t label_end;
+        if (quoted)
+        {
+            label_end = content.find('\'', pos);
+            if (label_end == std::string::npos) break;
+            pos = label_end + 1;
+        }
+        else
+        {
+            label_end = content.find(':', pos);
+            if (label_end == std::string::npos) break;
+            pos = label_end;
+        }
+
+        std::string label = content.substr(label_start, label_end - label_start);
+
+        // Skip colon
+        if (pos < content.size() && content[pos] == ':') pos++;
+
+        // Read value
+        size_t val_start = pos;
+        while (pos < content.size() && content[pos] != ';') pos++;
+        int value = std::atoi(content.substr(val_start, pos - val_start).c_str());
+
+        if (!label.empty())
+            labels[value] = label;
+
+        // Skip semicolon
+        if (pos < content.size() && content[pos] == ';') pos++;
+    }
+
+    return labels;
+}
+
+bool is_bool_param(const FaustParameterInfo& param)
+{
+    return param.is_button || (param.min == 0 && param.max == 1 && param.step == 1);
+}
+
+bool is_int_param(const FaustParameterInfo& param)
+{
+    return param.step >= 1.0f
+        && param.min == std::floor(param.min)
+        && param.max == std::floor(param.max);
+}
 
 } // namespace
 
@@ -328,6 +402,18 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
 
     _register_parameters(new_runtime->parameters);
 
+    // Parse menu labels from metadata
+    new_runtime->menu_labels.resize(new_runtime->parameters.size());
+    for (size_t i = 0; i < new_runtime->parameters.size(); ++i)
+    {
+        auto style_it = new_runtime->parameters[i].metadata.find("style");
+        if (style_it != new_runtime->parameters[i].metadata.end()
+            && style_it->second.substr(0, 5) == "menu{")
+        {
+            new_runtime->menu_labels[i] = parse_menu_style(style_it->second);
+        }
+    }
+
     // Swap in the new runtime
     auto* old_runtime = _runtime.exchange(new_runtime, std::memory_order_acq_rel);
 
@@ -386,6 +472,102 @@ void FaustWrapper::set_editor_recompile_callback(EditorRecompileCallback callbac
     _editor_recompile_callback = std::move(callback);
 }
 
+std::pair<ProcessorReturnCode, float> FaustWrapper::parameter_value(ObjectId parameter_id) const
+{
+    auto* rt = const_cast<FaustWrapper*>(this)->_load_runtime();
+    if (!rt || parameter_id >= rt->zones.size())
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, 0.0f};
+
+    auto& param = rt->parameters[parameter_id];
+    float range = param.max - param.min;
+    if (range <= 0.0f) return {ProcessorReturnCode::OK, 0.0f};
+
+    float domain_value = *rt->zones[parameter_id];
+    float normalized = (domain_value - param.min) / range;
+    return {ProcessorReturnCode::OK, std::clamp(normalized, 0.0f, 1.0f)};
+}
+
+std::pair<ProcessorReturnCode, float> FaustWrapper::parameter_value_in_domain(ObjectId parameter_id) const
+{
+    auto* rt = const_cast<FaustWrapper*>(this)->_load_runtime();
+    if (!rt || parameter_id >= rt->zones.size())
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, 0.0f};
+
+    return {ProcessorReturnCode::OK, static_cast<float>(*rt->zones[parameter_id])};
+}
+
+std::pair<ProcessorReturnCode, std::string> FaustWrapper::parameter_value_formatted(ObjectId parameter_id) const
+{
+    auto* rt = const_cast<FaustWrapper*>(this)->_load_runtime();
+    if (!rt || parameter_id >= rt->zones.size())
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+
+    auto [status, domain_val] = parameter_value_in_domain(parameter_id);
+    if (status != ProcessorReturnCode::OK) return {status, ""};
+
+    const auto& param = rt->parameters[parameter_id];
+
+    if (is_bool_param(param))
+    {
+        return {ProcessorReturnCode::OK, domain_val >= 0.5f ? "On" : "Off"};
+    }
+
+    if (is_int_param(param))
+    {
+        int int_val = static_cast<int>(std::round(domain_val));
+        // Check for menu labels
+        if (parameter_id < rt->menu_labels.size() && !rt->menu_labels[parameter_id].empty())
+        {
+            auto it = rt->menu_labels[parameter_id].find(int_val);
+            if (it != rt->menu_labels[parameter_id].end())
+                return {ProcessorReturnCode::OK, it->second};
+        }
+        return {ProcessorReturnCode::OK, std::to_string(int_val)};
+    }
+
+    // Float formatting
+    char buf[64];
+    if (domain_val == std::floor(domain_val) && std::abs(domain_val) < 1e6f)
+        snprintf(buf, sizeof(buf), "%.0f", domain_val);
+    else
+        snprintf(buf, sizeof(buf), "%.2f", domain_val);
+    return {ProcessorReturnCode::OK, buf};
+}
+
+std::pair<ProcessorReturnCode, std::string> FaustWrapper::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    auto* rt = const_cast<FaustWrapper*>(this)->_load_runtime();
+    if (!rt || parameter_id >= rt->zones.size())
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+
+    const auto& param = rt->parameters[parameter_id];
+    float domain_val = param.min + normalized_value * (param.max - param.min);
+
+    if (is_bool_param(param))
+    {
+        return {ProcessorReturnCode::OK, domain_val >= 0.5f ? "On" : "Off"};
+    }
+
+    if (is_int_param(param))
+    {
+        int int_val = static_cast<int>(std::round(domain_val));
+        if (parameter_id < rt->menu_labels.size() && !rt->menu_labels[parameter_id].empty())
+        {
+            auto it = rt->menu_labels[parameter_id].find(int_val);
+            if (it != rt->menu_labels[parameter_id].end())
+                return {ProcessorReturnCode::OK, it->second};
+        }
+        return {ProcessorReturnCode::OK, std::to_string(int_val)};
+    }
+
+    char buf[64];
+    if (domain_val == std::floor(domain_val) && std::abs(domain_val) < 1e6f)
+        snprintf(buf, sizeof(buf), "%.0f", domain_val);
+    else
+        snprintf(buf, sizeof(buf), "%.2f", domain_val);
+    return {ProcessorReturnCode::OK, buf};
+}
+
 void FaustWrapper::_register_parameters(const std::vector<FaustParameterInfo>& params)
 {
     for (size_t i = 0; i < params.size(); ++i)
@@ -396,16 +578,53 @@ void FaustWrapper::_register_parameters(const std::vector<FaustParameterInfo>& p
             continue;
         }
 
-        auto* descriptor = new FloatParameterDescriptor(
-            param.label,
-            param.label,
-            "",
-            param.min,
-            param.max,
-            Direction::AUTOMATABLE,
-            new FloatParameterPreProcessor(param.min, param.max));
+        // Extract unit from metadata
+        std::string unit;
+        auto unit_it = param.metadata.find("unit");
+        if (unit_it != param.metadata.end())
+        {
+            unit = unit_it->second;
+        }
 
-        register_parameter(descriptor, static_cast<ObjectId>(i));
+        if (is_bool_param(param))
+        {
+            auto* descriptor = new BoolParameterDescriptor(
+                param.label,
+                param.label,
+                unit,
+                false,
+                true,
+                Direction::AUTOMATABLE,
+                new BoolParameterPreProcessor(false, true));
+
+            register_parameter(descriptor, static_cast<ObjectId>(i));
+        }
+        else if (is_int_param(param))
+        {
+            auto* descriptor = new IntParameterDescriptor(
+                param.label,
+                param.label,
+                unit,
+                static_cast<int>(param.min),
+                static_cast<int>(param.max),
+                Direction::AUTOMATABLE,
+                new IntParameterPreProcessor(static_cast<int>(param.min), static_cast<int>(param.max)));
+
+            register_parameter(descriptor, static_cast<ObjectId>(i));
+        }
+        else
+        {
+            auto* descriptor = new FloatParameterDescriptor(
+                param.label,
+                param.label,
+                unit,
+                param.min,
+                param.max,
+                Direction::AUTOMATABLE,
+                new FloatParameterPreProcessor(param.min, param.max));
+
+            register_parameter(descriptor, static_cast<ObjectId>(i));
+        }
     }
 }
 
