@@ -475,7 +475,8 @@ public:
     virtual ControlStatus move_processor_on_track(int processor_id, int source_track_id, int dest_track_id, std::optional<int> before_processor_id) = 0;
     virtual ControlStatus create_processor_on_track(const std::string& name, const std::string& uid, const std::string& file,
                                                     PluginType type, int track_id, std::optional<int> before_processor_id,
-                                                    const std::string& source_code = "") = 0;
+                                                    const std::string& source_code = "",
+                                                    const std::string& backend = "") = 0;
 
     virtual ControlStatus delete_processor_from_track(int processor_id, int track_id) = 0;
     virtual ControlStatus delete_track(int track_id) = 0;

@@ -352,7 +352,8 @@ control::ControlStatus AudioGraphController::create_processor_on_track(const std
                                                      control::PluginType type,
                                                                    int track_id,
                                                                    std::optional<int> before_processor_id,
-                                                                   const std::string& source_code)
+                                                                   const std::string& source_code,
+                                                                   const std::string& backend)
 {
     ELKLOG_LOG_DEBUG("create_processor_on_track called with name {}, uid {} from {} on track {}",
                                                                     name, uid, file, track_id);
@@ -363,6 +364,7 @@ control::ControlStatus AudioGraphController::create_processor_on_track(const std
         plugin_info.path = file;
         plugin_info.type = to_internal(type);
         plugin_info.source_code = source_code;
+        plugin_info.backend = backend;
 
         auto [status, plugin_id] = _engine->create_processor(plugin_info, name);
         if (status != EngineReturnStatus::OK)

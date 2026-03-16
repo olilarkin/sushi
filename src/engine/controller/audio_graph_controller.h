@@ -79,7 +79,8 @@ public:
                                                      control::PluginType type,
                                                      int track_id,
                                                      std::optional<int> before_processor_id,
-                                                     const std::string& source_code = "") override;
+                                                     const std::string& source_code = "",
+                                                     const std::string& backend = "") override;
 
     control::ControlStatus delete_processor_from_track(int processor_id, int track_id) override;
 
