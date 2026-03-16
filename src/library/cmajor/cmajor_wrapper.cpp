@@ -791,6 +791,22 @@ std::pair<ProcessorReturnCode, std::string> CmajorWrapper::parameter_value_forma
                                       it->second->domain_value.load())};
 }
 
+std::pair<ProcessorReturnCode, std::string> CmajorWrapper::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    std::scoped_lock<std::mutex> lock(_state_lock);
+    auto it = _parameters_by_id.find(parameter_id);
+    if (it == _parameters_by_id.end())
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    float domain_value = it->second->properties.convertFrom0to1(normalized_value);
+    return {ProcessorReturnCode::OK,
+            formatted_parameter_value(it->second->properties,
+                                      it->second->value_type,
+                                      domain_value)};
+}
+
 std::pair<ProcessorReturnCode, std::string> CmajorWrapper::property_value(ObjectId property_id) const
 {
     std::scoped_lock<std::mutex> lock(_state_lock);

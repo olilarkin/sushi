@@ -51,6 +51,8 @@ public:
 
     std::pair<control::ControlStatus, std::string> get_parameter_value_as_string(int processor_id, int parameter_id) const override;
 
+    std::pair<control::ControlStatus, std::string> get_parameter_value_as_string(int processor_id, int parameter_id, float normalized_value) const override;
+
     control::ControlStatus set_parameter_value(int processor_id, int parameter_id, float value) override;
 
     std::pair<control::ControlStatus, std::vector<control::PropertyInfo>>  get_processor_properties(int processor_id) const override;

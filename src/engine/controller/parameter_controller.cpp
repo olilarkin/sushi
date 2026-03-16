@@ -18,6 +18,8 @@
  * @Copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
+#include <cmath>
+
 #include "elklog/static_logger.h"
 
 #include "parameter_controller.h"
@@ -189,6 +191,37 @@ std::pair<control::ControlStatus, std::string> ParameterController::get_paramete
         if (status == ProcessorReturnCode::OK)
         {
             return {control::ControlStatus::OK, value};
+        }
+    }
+    return {control::ControlStatus::NOT_FOUND, ""};
+}
+
+std::pair<control::ControlStatus, std::string> ParameterController::get_parameter_value_as_string(int processor_id, int parameter_id, float normalized_value) const
+{
+    ELKLOG_LOG_DEBUG("get_parameter_value_as_string called with processor {}, parameter {} and normalized_value {}", processor_id, parameter_id, normalized_value);
+    auto processor = _processors->processor(static_cast<ObjectId>(processor_id));
+    if (processor != nullptr)
+    {
+        auto[status, value] = processor->parameter_value_formatted(static_cast<ObjectId>(parameter_id), normalized_value);
+        if (status == ProcessorReturnCode::OK)
+        {
+            return {control::ControlStatus::OK, value};
+        }
+
+        // Fallback: compute domain value from ParameterInfo and format as number
+        auto descr = processor->parameter_from_id(static_cast<ObjectId>(parameter_id));
+        if (descr != nullptr)
+        {
+            float domain = descr->min_domain_value() + normalized_value * (descr->max_domain_value() - descr->min_domain_value());
+            if (descr->type() == ParameterType::INT)
+            {
+                return {control::ControlStatus::OK, std::to_string(static_cast<int>(std::round(domain)))};
+            }
+            else if (descr->type() == ParameterType::BOOL)
+            {
+                return {control::ControlStatus::OK, normalized_value >= 0.5f ? "True" : "False"};
+            }
+            return {control::ControlStatus::OK, fmt::format("{0:0.2f}", domain)};
         }
     }
     return {control::ControlStatus::NOT_FOUND, ""};

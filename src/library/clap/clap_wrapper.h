@@ -109,6 +109,8 @@ public:
 
     std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id) const override;
 
+    std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id, float normalized_value) const override;
+
     ProcessorReturnCode set_state(ProcessorState* state, bool realtime_running) override;
 
     ProcessorState save_state() const override;

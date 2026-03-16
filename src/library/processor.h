@@ -284,6 +284,19 @@ public:
     };
 
     /**
+     * @brief Get the display string for a parameter at an arbitrary normalized value,
+     *        without mutating the parameter's current state.
+     * @param parameter_id The Id of the requested parameter
+     * @param normalized_value The normalized value (0..1) to format
+     * @return The formatted value string, if return code is OK
+     */
+    virtual std::pair<ProcessorReturnCode, std::string>
+    parameter_value_formatted(ObjectId /*parameter_id*/, float /*normalized_value*/) const
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    /**
      * @brief Get the value of a property. Should only be called from a non-rt thread
      * @param property_id The id of the requested property
      * @return A string containing the current string property value if return code is OK

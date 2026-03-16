@@ -583,6 +583,32 @@ std::pair<ProcessorReturnCode, std::string> ClapWrapper::parameter_value_formatt
     return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
 }
 
+std::pair<ProcessorReturnCode, std::string> ClapWrapper::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    auto it = _sushi_to_clap_param.find(parameter_id);
+    if (it == _sushi_to_clap_param.end())
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    if (_instance.params())
+    {
+        auto param_desc = parameter_from_id(parameter_id);
+        if (param_desc)
+        {
+            double plain = param_desc->min_domain_value() +
+                           normalized_value * (param_desc->max_domain_value() - param_desc->min_domain_value());
+            char buffer[CLAP_NAME_BUFFER_SIZE] = {};
+            if (_instance.params()->value_to_text(_instance.plugin(), it->second, plain, buffer, sizeof(buffer)))
+            {
+                return {ProcessorReturnCode::OK, std::string(buffer)};
+            }
+            return {ProcessorReturnCode::OK, std::to_string(plain)};
+        }
+    }
+    return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+}
+
 ProcessorReturnCode ClapWrapper::set_state(ProcessorState* state, bool /*realtime_running*/)
 {
     if (state->has_binary_data() && _instance.state())
