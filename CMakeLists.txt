@@ -143,6 +143,7 @@ option(SUSHI_WITH_AUV2 "Enable Audio Unit V2 support" ${SUSHI_WITH_AUV2_DEFAULT}
 option(SUSHI_WITH_CMAJOR "Enable Cmajor support" ${SUSHI_WITH_CMAJOR_DEFAULT})
 option(SUSHI_WITH_JSFX "Enable JSFX support" ${SUSHI_WITH_JSFX_DEFAULT})
 option(SUSHI_WITH_FAUST "Enable Faust DSP support" ${SUSHI_WITH_FAUST_DEFAULT})
+option(SUSHI_FAUST_WITH_LLVM "Enable Faust LLVM JIT backend (requires LLVM)" OFF)
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -567,6 +568,10 @@ if (${SUSHI_WITH_FAUST})
     set(SELF_CONTAINED_LIBRARY ON CACHE BOOL "" FORCE)
 
     include(third-party/faust/build/backends/interp.cmake)
+    if (SUSHI_FAUST_WITH_LLVM)
+        message("Building Faust with LLVM JIT backend.")
+        set(LLVM_BACKEND "STATIC DYNAMIC" CACHE STRING "Include LLVM backend" FORCE)
+    endif()
     add_subdirectory(third-party/faust/build EXCLUDE_FROM_ALL)
 
     set(ADDITIONAL_FAUST_SOURCES
@@ -631,6 +636,10 @@ if (${SUSHI_WITH_FAUST})
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS}
         -DSUSHI_BUILD_WITH_FAUST
         -DFAUST_LIBRARIES_DIR="${PROJECT_SOURCE_DIR}/third-party/faust/libraries")
+
+    if (SUSHI_FAUST_WITH_LLVM)
+        set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_FAUST_WITH_LLVM)
+    endif()
 endif()
 
 ###############

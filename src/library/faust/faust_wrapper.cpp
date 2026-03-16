@@ -16,6 +16,9 @@
 #include "faust_wrapper.h"
 
 #include "faust/dsp/interpreter-dsp.h"
+#ifdef SUSHI_FAUST_WITH_LLVM
+#include "faust/dsp/llvm-dsp.h"
+#endif
 #include "faust/gui/JSONUI.h"
 
 #include "elklog/static_logger.h"
@@ -63,6 +66,21 @@ ProcessorReturnCode FaustWrapper::init(float sample_rate)
 {
     _sample_rate = sample_rate;
 
+    if (_plugin_info.backend == "llvm")
+    {
+#ifdef SUSHI_FAUST_WITH_LLVM
+        _backend = FaustBackend::LLVM;
+#else
+        ELKLOG_LOG_ERROR("Faust LLVM backend requested but not compiled in");
+        return ProcessorReturnCode::PLUGIN_INIT_ERROR;
+#endif
+    }
+    else
+    {
+        _backend = FaustBackend::INTERPRETER;
+    }
+    _llvm_opt_level = _plugin_info.llvm_opt_level;
+
     if (!_plugin_info.source_code.empty())
     {
         _source_code = _plugin_info.source_code;
@@ -94,9 +112,9 @@ void FaustWrapper::configure(float sample_rate)
 
     std::lock_guard<std::mutex> lock(_compile_lock);
     auto* rt = _load_runtime();
-    if (rt && rt->dsp)
+    if (rt && rt->dsp_instance)
     {
-        rt->dsp->init(static_cast<int>(sample_rate));
+        rt->dsp_instance->init(static_cast<int>(sample_rate));
     }
 }
 
@@ -139,14 +157,14 @@ void FaustWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSample
     }
 
     auto* rt = _load_runtime();
-    if (!rt || !rt->dsp)
+    if (!rt || !rt->dsp_instance)
     {
         out_buffer.clear();
         return;
     }
 
-    int in_channels = std::min(in_buffer.channel_count(), rt->dsp->getNumInputs());
-    int out_channels = std::min(out_buffer.channel_count(), rt->dsp->getNumOutputs());
+    int in_channels = std::min(in_buffer.channel_count(), rt->dsp_instance->getNumInputs());
+    int out_channels = std::min(out_buffer.channel_count(), rt->dsp_instance->getNumOutputs());
 
     // Set up input channel pointers
     std::array<FAUSTFLOAT*, 64> inputs {};
@@ -156,7 +174,7 @@ void FaustWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSample
     }
     // Provide silent buffers for any extra Faust inputs
     FAUSTFLOAT silence[AUDIO_CHUNK_SIZE] = {};
-    for (int ch = in_channels; ch < rt->dsp->getNumInputs(); ++ch)
+    for (int ch = in_channels; ch < rt->dsp_instance->getNumInputs(); ++ch)
     {
         inputs[ch] = silence;
     }
@@ -169,12 +187,12 @@ void FaustWrapper::process_audio(const ChunkSampleBuffer& in_buffer, ChunkSample
     }
     // Provide scratch buffers for any extra Faust outputs
     FAUSTFLOAT scratch[AUDIO_CHUNK_SIZE] = {};
-    for (int ch = out_channels; ch < rt->dsp->getNumOutputs(); ++ch)
+    for (int ch = out_channels; ch < rt->dsp_instance->getNumOutputs(); ++ch)
     {
         outputs[ch] = scratch;
     }
 
-    rt->dsp->compute(AUDIO_CHUNK_SIZE, inputs.data(), outputs.data());
+    rt->dsp_instance->compute(AUDIO_CHUNK_SIZE, inputs.data(), outputs.data());
 
     // Clear any output channels beyond what Faust provides
     for (int ch = out_channels; ch < out_buffer.channel_count(); ++ch)
@@ -220,7 +238,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     std::unique_lock<std::mutex> lock(_compile_lock);
 
     std::string error_msg;
-    interpreter_dsp_factory* factory = nullptr;
+    dsp_factory* factory = nullptr;
 
     std::vector<const char*> argv;
     std::string lib_path_arg;
@@ -234,13 +252,29 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     int argc = static_cast<int>(argv.size());
     const char** argv_ptr = argv.empty() ? nullptr : argv.data();
 
-    if (is_file)
+#ifdef SUSHI_FAUST_WITH_LLVM
+    if (_backend == FaustBackend::LLVM)
     {
-        factory = createInterpreterDSPFactoryFromFile(source, argc, argv_ptr, error_msg);
+        if (is_file)
+        {
+            factory = createDSPFactoryFromFile(source, argc, argv_ptr, "", error_msg, _llvm_opt_level);
+        }
+        else
+        {
+            factory = createDSPFactoryFromString("faust_dsp", source, argc, argv_ptr, "", error_msg, _llvm_opt_level);
+        }
     }
     else
+#endif
     {
-        factory = createInterpreterDSPFactoryFromString("faust_dsp", source, argc, argv_ptr, error_msg);
+        if (is_file)
+        {
+            factory = createInterpreterDSPFactoryFromFile(source, argc, argv_ptr, error_msg);
+        }
+        else
+        {
+            factory = createInterpreterDSPFactoryFromString("faust_dsp", source, argc, argv_ptr, error_msg);
+        }
     }
 
     if (!factory)
@@ -251,26 +285,36 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
         return false;
     }
 
-    auto* dsp = factory->createDSPInstance();
-    if (!dsp)
+    auto* dsp_inst = factory->createDSPInstance();
+    if (!dsp_inst)
     {
         _compile_status = "error";
         _build_log = "Failed to create DSP instance";
         ELKLOG_LOG_ERROR("Failed to create Faust DSP instance");
-        deleteInterpreterDSPFactory(factory);
+#ifdef SUSHI_FAUST_WITH_LLVM
+        if (_backend == FaustBackend::LLVM)
+        {
+            deleteDSPFactory(static_cast<llvm_dsp_factory*>(factory));
+        }
+        else
+#endif
+        {
+            deleteInterpreterDSPFactory(static_cast<interpreter_dsp_factory*>(factory));
+        }
         return false;
     }
 
-    dsp->init(static_cast<int>(_sample_rate));
+    dsp_inst->init(static_cast<int>(_sample_rate));
 
     // Discover parameters
     FaustUICollector ui_collector;
-    dsp->buildUserInterface(&ui_collector);
+    dsp_inst->buildUserInterface(&ui_collector);
 
     // Set up new runtime
     auto* new_runtime = new Runtime();
     new_runtime->factory = factory;
-    new_runtime->dsp = dsp;
+    new_runtime->dsp_instance = dsp_inst;
+    new_runtime->backend = _backend;
     new_runtime->parameters = ui_collector.parameters();
 
     new_runtime->zones.reserve(new_runtime->parameters.size());
@@ -279,8 +323,8 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
         new_runtime->zones.push_back(param.zone);
     }
 
-    _max_input_channels = dsp->getNumInputs();
-    _max_output_channels = dsp->getNumOutputs();
+    _max_input_channels = dsp_inst->getNumInputs();
+    _max_output_channels = dsp_inst->getNumOutputs();
 
     _register_parameters(new_runtime->parameters);
 
@@ -290,7 +334,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     _compile_status = "ok";
     _build_log.clear();
     ELKLOG_LOG_INFO("Faust DSP compiled successfully ({} inputs, {} outputs, {} parameters)",
-                    dsp->getNumInputs(), dsp->getNumOutputs(), new_runtime->parameters.size());
+                    dsp_inst->getNumInputs(), dsp_inst->getNumOutputs(), new_runtime->parameters.size());
 
     // Copy callback and release lock before invoking — the callback may call ui_json()
     // which also takes _compile_lock
@@ -316,13 +360,13 @@ std::string FaustWrapper::ui_json() const
 {
     std::lock_guard<std::mutex> lock(_compile_lock);
     auto* rt = _runtime.load(std::memory_order_acquire);
-    if (!rt || !rt->dsp)
+    if (!rt || !rt->dsp_instance)
     {
         return {};
     }
 
     JSONUI jsonui;
-    rt->dsp->buildUserInterface(&jsonui);
+    rt->dsp_instance->buildUserInterface(&jsonui);
     return jsonui.JSON();
 }
 
@@ -377,13 +421,22 @@ void FaustWrapper::_store_runtime(Runtime* runtime)
 
 void FaustWrapper::_delete_runtime(Runtime* runtime)
 {
-    if (runtime->dsp)
+    if (runtime->dsp_instance)
     {
-        delete runtime->dsp;
+        delete runtime->dsp_instance;
     }
     if (runtime->factory)
     {
-        deleteInterpreterDSPFactory(runtime->factory);
+#ifdef SUSHI_FAUST_WITH_LLVM
+        if (runtime->backend == FaustBackend::LLVM)
+        {
+            deleteDSPFactory(static_cast<llvm_dsp_factory*>(runtime->factory));
+        }
+        else
+#endif
+        {
+            deleteInterpreterDSPFactory(static_cast<interpreter_dsp_factory*>(runtime->factory));
+        }
     }
     delete runtime;
 }

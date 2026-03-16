@@ -1124,6 +1124,17 @@ JsonConfigReturnStatus JsonConfigurator::_add_plugin(const rapidjson::Value& plu
     {
         plugin_info.source_code = plugin_def["source_code"].GetString();
     }
+    if (plugin_type == PluginType::FAUST)
+    {
+        if (plugin_def.HasMember("backend"))
+        {
+            plugin_info.backend = plugin_def["backend"].GetString();
+        }
+        if (plugin_def.HasMember("llvm_opt_level"))
+        {
+            plugin_info.llvm_opt_level = plugin_def["llvm_opt_level"].GetInt();
+        }
+    }
 
     auto [status, plugin_id] = _engine->create_processor(plugin_info, plugin_name);
     if (status != EngineReturnStatus::OK)

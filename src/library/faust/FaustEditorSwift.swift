@@ -93,7 +93,7 @@ func SushiFaustEditorView_create(_ jsonCStr: UnsafePointer<CChar>,
     let sizingView = NSHostingView(rootView: contentView)
     let fittingSize = sizingView.fittingSize
 
-    let faustView = FaustUIView(ui: uiItems, viewModel: vm)
+    let faustView = FaustUIView(ui: uiItems, viewModel: vm, scrollable: false)
     let hostingView = NSHostingView(rootView: faustView)
 
     let width = min(max(Int(fittingSize.width), 400), 1200)
