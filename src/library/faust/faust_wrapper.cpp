@@ -22,6 +22,7 @@
 #include "faust/gui/JSONUI.h"
 
 #include "elklog/static_logger.h"
+#include "library/event.h"
 
 #include <algorithm>
 #include <cmath>
@@ -291,11 +292,13 @@ ProcessorReturnCode FaustWrapper::set_property_value(ObjectId property_id, const
     if (property_id == SOURCE_CODE_PROPERTY_ID)
     {
         _source_code = value;
+        _set_property_value_locked(SOURCE_CODE_PROPERTY_ID, value, true);
         return _compile(value, false) ? ProcessorReturnCode::OK : ProcessorReturnCode::ERROR;
     }
     else if (property_id == SOURCE_PATH_PROPERTY_ID)
     {
         _source_path = value;
+        _set_property_value_locked(SOURCE_PATH_PROPERTY_ID, value, true);
         return _compile(value, true) ? ProcessorReturnCode::OK : ProcessorReturnCode::ERROR;
     }
     return ProcessorReturnCode::PARAMETER_NOT_FOUND;
@@ -359,8 +362,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
 
     if (!factory)
     {
-        _compile_status = "error";
-        _build_log = error_msg;
+        _set_compile_feedback_locked("error", error_msg, true);
         ELKLOG_LOG_ERROR("Faust compilation failed: {}", error_msg);
         return false;
     }
@@ -368,8 +370,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     auto* dsp_inst = factory->createDSPInstance();
     if (!dsp_inst)
     {
-        _compile_status = "error";
-        _build_log = "Failed to create DSP instance";
+        _set_compile_feedback_locked("error", "Failed to create DSP instance", true);
         ELKLOG_LOG_ERROR("Failed to create Faust DSP instance");
 #ifdef SUSHI_FAUST_WITH_LLVM
         if (_backend == FaustBackend::LLVM)
@@ -423,8 +424,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     // Swap in the new runtime
     auto* old_runtime = _runtime.exchange(new_runtime, std::memory_order_acq_rel);
 
-    _compile_status = "ok";
-    _build_log.clear();
+    _set_compile_feedback_locked("ok", "", true);
     ELKLOG_LOG_INFO("Faust DSP compiled successfully via {} ({} inputs, {} outputs, {} parameters)",
                     _backend == FaustBackend::LLVM ? "LLVM" : "interpreter",
                     dsp_inst->getNumInputs(), dsp_inst->getNumOutputs(), new_runtime->parameters.size());
@@ -433,6 +433,8 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     // which also takes _compile_lock
     auto recompile_cb = _editor_recompile_callback;
     lock.unlock();
+
+    _notify_layout_changed();
 
     // Invoke recompile callback before deleting old runtime so zone pointers remain valid
     // until the editor has rebound to the new ones
@@ -447,6 +449,35 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
     }
 
     return true;
+}
+
+void FaustWrapper::_set_property_value_locked(ObjectId property_id, const std::string& value, bool notify)
+{
+    if (notify)
+    {
+        _host_control.post_event(std::make_unique<PropertyChangeNotificationEvent>(this->id(),
+                                                                                   property_id,
+                                                                                   value,
+                                                                                   IMMEDIATE_PROCESS));
+    }
+}
+
+void FaustWrapper::_set_compile_feedback_locked(const std::string& status,
+                                                std::string build_log,
+                                                bool notify)
+{
+    _compile_status = status;
+    _build_log = std::move(build_log);
+    _set_property_value_locked(COMPILE_STATUS_PROPERTY_ID, _compile_status, notify);
+    _set_property_value_locked(BUILD_LOG_PROPERTY_ID, _build_log, notify);
+}
+
+void FaustWrapper::_notify_layout_changed()
+{
+    _host_control.post_event(std::make_unique<AudioGraphNotificationEvent>(AudioGraphNotificationEvent::Action::PROCESSOR_LAYOUT_CHANGED,
+                                                                           this->id(),
+                                                                           0,
+                                                                           IMMEDIATE_PROCESS));
 }
 
 std::string FaustWrapper::ui_json() const

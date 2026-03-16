@@ -85,6 +85,9 @@ private:
     };
 
     bool _compile(const std::string& source, bool is_file);
+    void _set_property_value_locked(ObjectId property_id, const std::string& value, bool notify);
+    void _set_compile_feedback_locked(const std::string& status, std::string build_log, bool notify);
+    void _notify_layout_changed();
     void _register_parameters(const std::vector<FaustParameterInfo>& params);
     Runtime* _load_runtime();
     void _store_runtime(Runtime* runtime);
