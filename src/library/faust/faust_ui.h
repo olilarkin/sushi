@@ -21,6 +21,7 @@
 #include <map>
 
 #include "faust/gui/UI.h"
+#include "faust/gui/PathBuilder.h"
 
 namespace sushi::internal::faust_wrapper {
 
@@ -38,7 +39,7 @@ struct FaustParameterInfo
     std::map<std::string, std::string> metadata;
 };
 
-class FaustUICollector : public UI
+class FaustUICollector : public UI, public PathBuilder
 {
 public:
     const std::vector<FaustParameterInfo>& parameters() const { return _parameters; }
@@ -46,25 +47,22 @@ public:
     // -- widget's layouts
     void openTabBox(const char* label) override
     {
-        _group_stack.push_back(label);
+        pushLabel(label);
     }
 
     void openHorizontalBox(const char* label) override
     {
-        _group_stack.push_back(label);
+        pushLabel(label);
     }
 
     void openVerticalBox(const char* label) override
     {
-        _group_stack.push_back(label);
+        pushLabel(label);
     }
 
     void closeBox() override
     {
-        if (!_group_stack.empty())
-        {
-            _group_stack.pop_back();
-        }
+        popLabel();
     }
 
     // -- active widgets
@@ -72,7 +70,7 @@ public:
     {
         FaustParameterInfo info;
         info.label = label;
-        info.full_path = _build_path(label);
+        info.full_path = buildPath(label);
         info.zone = zone;
         info.init = 0;
         info.min = 0;
@@ -113,7 +111,7 @@ public:
     {
         FaustParameterInfo info;
         info.label = label;
-        info.full_path = _build_path(label);
+        info.full_path = buildPath(label);
         info.zone = zone;
         info.min = min;
         info.max = max;
@@ -148,7 +146,7 @@ private:
     {
         FaustParameterInfo info;
         info.label = label;
-        info.full_path = _build_path(label);
+        info.full_path = buildPath(label);
         info.zone = zone;
         info.init = init;
         info.min = min;
@@ -160,22 +158,7 @@ private:
         _parameters.push_back(std::move(info));
     }
 
-    std::string _build_path(const char* label) const
-    {
-        std::string path;
-        for (const auto& group : _group_stack)
-        {
-            if (!group.empty())
-            {
-                path += group + "/";
-            }
-        }
-        path += label;
-        return path;
-    }
-
     std::vector<FaustParameterInfo> _parameters;
-    std::vector<std::string> _group_stack;
     std::map<FAUSTFLOAT*, size_t> _zone_index;
     std::map<std::string, std::string> _pending_metadata;
 };

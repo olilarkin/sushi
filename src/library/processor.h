@@ -75,13 +75,17 @@ struct PluginInfo
     std::string path;
     PluginType type;
     std::string source_code;
+    std::string backend;
+    int llvm_opt_level {-1};
 
     bool operator == (const PluginInfo& other) const
     {
         return (uid == other.uid) &&
                (path == other.path) &&
                (type == other.type) &&
-               (source_code == other.source_code);
+               (source_code == other.source_code) &&
+               (backend == other.backend) &&
+               (llvm_opt_level == other.llvm_opt_level);
     }
 };
 

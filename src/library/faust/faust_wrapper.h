@@ -25,10 +25,16 @@
 #include "library/processor.h"
 #include "faust_ui.h"
 
-class interpreter_dsp_factory;
-class interpreter_dsp;
+class dsp_factory;
+class dsp;
 
 namespace sushi::internal::faust_wrapper {
+
+enum class FaustBackend
+{
+    INTERPRETER,
+    LLVM
+};
 
 class FaustWrapper : public Processor
 {
@@ -65,8 +71,9 @@ public:
 private:
     struct Runtime
     {
-        interpreter_dsp_factory* factory {nullptr};
-        interpreter_dsp* dsp {nullptr};
+        dsp_factory* factory {nullptr};
+        dsp* dsp_instance {nullptr};
+        FaustBackend backend {FaustBackend::INTERPRETER};
         std::vector<FaustParameterInfo> parameters;
         std::vector<FAUSTFLOAT*> zones;
     };
@@ -78,6 +85,8 @@ private:
     void _delete_runtime(Runtime* runtime);
 
     PluginInfo _plugin_info;
+    FaustBackend _backend {FaustBackend::INTERPRETER};
+    int _llvm_opt_level {-1};
     float _sample_rate {44100.0f};
     std::atomic<Runtime*> _runtime {nullptr};
     mutable std::mutex _compile_lock;
