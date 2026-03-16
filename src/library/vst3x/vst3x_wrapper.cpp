@@ -381,6 +381,18 @@ std::pair<ProcessorReturnCode, std::string> Vst3xWrapper::parameter_value_format
     return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
 }
 
+std::pair<ProcessorReturnCode, std::string> Vst3xWrapper::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    auto controller = const_cast<PluginInstance*>(&_instance)->controller();
+    Steinberg::Vst::String128 buffer = {};
+    auto res = controller->getParamStringByValue(parameter_id, normalized_value, buffer);
+    if (res == Steinberg::kResultOk)
+    {
+        return {ProcessorReturnCode::OK, to_ascii_str(buffer)};
+    }
+    return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+}
+
 int Vst3xWrapper::current_program() const
 {
     if (_supports_programs)

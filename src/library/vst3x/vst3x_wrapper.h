@@ -115,6 +115,8 @@ public:
 
     std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id) const override;
 
+    std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id, float normalized_value) const override;
+
     bool has_editor() const override;
 
     Steinberg::Vst::IEditController* edit_controller() const;

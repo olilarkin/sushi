@@ -512,6 +512,7 @@ public:
     [[nodiscard]] virtual std::pair<ControlStatus, float>                      get_parameter_value(int processor_id, int parameter_id) const = 0;
     [[nodiscard]] virtual std::pair<ControlStatus, float>                      get_parameter_value_in_domain(int processor_id, int parameter_id) const = 0;
     [[nodiscard]] virtual std::pair<ControlStatus, std::string>                get_parameter_value_as_string(int processor_id, int parameter_id) const = 0;
+    [[nodiscard]] virtual std::pair<ControlStatus, std::string>                get_parameter_value_as_string(int processor_id, int parameter_id, float normalized_value) const = 0;
 
     virtual ControlStatus set_parameter_value(int processor_id, int parameter_id, float value) = 0;
 

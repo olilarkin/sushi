@@ -479,6 +479,11 @@ class ParameterControllerMockup : public ParameterController, public TestableCon
         return {_return_status, std::to_string(DEFAULT_PARAMETER_VALUE)};
     }
 
+    std::pair<ControlStatus, std::string> get_parameter_value_as_string(int /*processor_id*/, int /*parameter_id*/, float normalized_value) const override
+    {
+        return {_return_status, std::to_string(normalized_value)};
+    }
+
     ControlStatus set_parameter_value(int processor_id, int parameter_id, float value) override
     {
         _args_from_last_call.clear();

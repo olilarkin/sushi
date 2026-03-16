@@ -85,6 +85,8 @@ public:
 
     std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id) const override;
 
+    std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id, float normalized_value) const override;
+
     std::pair<ProcessorReturnCode, std::string> property_value(ObjectId property_id) const override;
 
     ProcessorReturnCode set_property_value(ObjectId property_id, const std::string& value) override;

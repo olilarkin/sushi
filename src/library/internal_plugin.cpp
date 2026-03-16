@@ -288,6 +288,39 @@ std::pair<ProcessorReturnCode, std::string> InternalPlugin::parameter_value_form
     return {ProcessorReturnCode::PARAMETER_ERROR, ""};
 }
 
+std::pair<ProcessorReturnCode, std::string> InternalPlugin::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    if (parameter_id >= _parameter_values.size())
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    const auto& value_storage = _parameter_values[parameter_id];
+    auto* descr = parameter_from_id(parameter_id);
+    if (descr == nullptr)
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+    float min_d = descr->min_domain_value();
+    float max_d = descr->max_domain_value();
+    float domain = min_d + normalized_value * (max_d - min_d);
+
+    if (value_storage.type() == ParameterType::FLOAT)
+    {
+        return {ProcessorReturnCode::OK, fmt::format("{0:0.2f}", domain)};
+    }
+    else if (value_storage.type() == ParameterType::INT)
+    {
+        return {ProcessorReturnCode::OK, std::to_string(static_cast<int>(std::round(domain)))};
+    }
+    else if (value_storage.type() == ParameterType::BOOL)
+    {
+        return {ProcessorReturnCode::OK, normalized_value >= 0.5f ? "True" : "False"};
+    }
+
+    return {ProcessorReturnCode::PARAMETER_ERROR, ""};
+}
+
 std::pair<ProcessorReturnCode, std::string> InternalPlugin::property_value(ObjectId property_id) const
 {
     std::scoped_lock<std::mutex> lock(_property_lock);
