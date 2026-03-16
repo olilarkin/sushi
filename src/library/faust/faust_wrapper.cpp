@@ -158,7 +158,7 @@ ProcessorReturnCode FaustWrapper::init(float sample_rate)
         _backend = FaustBackend::INTERPRETER;
 #endif
     }
-    ELKLOG_LOG_WARNING("Faust using {} backend", _backend == FaustBackend::LLVM ? "LLVM" : "interpreter");
+    ELKLOG_LOG_INFO("Faust using {} backend", _backend == FaustBackend::LLVM ? "LLVM" : "interpreter");
     _llvm_opt_level = _plugin_info.llvm_opt_level;
 
     if (!_plugin_info.source_code.empty())
@@ -425,7 +425,7 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
 
     _compile_status = "ok";
     _build_log.clear();
-    ELKLOG_LOG_WARNING("Faust DSP compiled successfully via {} ({} inputs, {} outputs, {} parameters)",
+    ELKLOG_LOG_INFO("Faust DSP compiled successfully via {} ({} inputs, {} outputs, {} parameters)",
                     _backend == FaustBackend::LLVM ? "LLVM" : "interpreter",
                     dsp_inst->getNumInputs(), dsp_inst->getNumOutputs(), new_runtime->parameters.size());
 
