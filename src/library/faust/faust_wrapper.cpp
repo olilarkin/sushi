@@ -140,19 +140,25 @@ ProcessorReturnCode FaustWrapper::init(float sample_rate)
 {
     _sample_rate = sample_rate;
 
-    if (_plugin_info.backend == "llvm")
-    {
-#ifdef SUSHI_FAUST_WITH_LLVM
-        _backend = FaustBackend::LLVM;
-#else
-        ELKLOG_LOG_ERROR("Faust LLVM backend requested but not compiled in");
-        return ProcessorReturnCode::PLUGIN_INIT_ERROR;
-#endif
-    }
-    else
+    if (_plugin_info.backend == "interpreter")
     {
         _backend = FaustBackend::INTERPRETER;
     }
+    else
+    {
+        // Default to LLVM when available (better performance)
+#ifdef SUSHI_FAUST_WITH_LLVM
+        _backend = FaustBackend::LLVM;
+#else
+        if (_plugin_info.backend == "llvm")
+        {
+            ELKLOG_LOG_ERROR("Faust LLVM backend requested but not compiled in");
+            return ProcessorReturnCode::PLUGIN_INIT_ERROR;
+        }
+        _backend = FaustBackend::INTERPRETER;
+#endif
+    }
+    ELKLOG_LOG_WARNING("Faust using {} backend", _backend == FaustBackend::LLVM ? "LLVM" : "interpreter");
     _llvm_opt_level = _plugin_info.llvm_opt_level;
 
     if (!_plugin_info.source_code.empty())
@@ -419,7 +425,8 @@ bool FaustWrapper::_compile(const std::string& source, bool is_file)
 
     _compile_status = "ok";
     _build_log.clear();
-    ELKLOG_LOG_INFO("Faust DSP compiled successfully ({} inputs, {} outputs, {} parameters)",
+    ELKLOG_LOG_WARNING("Faust DSP compiled successfully via {} ({} inputs, {} outputs, {} parameters)",
+                    _backend == FaustBackend::LLVM ? "LLVM" : "interpreter",
                     dsp_inst->getNumInputs(), dsp_inst->getNumOutputs(), new_runtime->parameters.size());
 
     // Copy callback and release lock before invoking — the callback may call ui_json()
