@@ -715,6 +715,27 @@ std::pair<control::ControlStatus, control::EditorRect> EditorController::open_ed
 
             _jsfx_editors[id] = std::move(editor_host);
             _windows[id] = std::move(window);
+            _windows[id]->set_close_callback([this, id]() {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    std::lock_guard<std::mutex> lock(_mutex);
+
+                    auto jsfx_it = _jsfx_editors.find(id);
+                    if (jsfx_it != _jsfx_editors.end())
+                    {
+                        jsfx_it->second->close();
+                        _jsfx_editors.erase(jsfx_it);
+                    }
+
+                    auto win_it = _windows.find(id);
+                    if (win_it != _windows.end())
+                    {
+                        control::EditorRect frame;
+                        win_it->second->get_frame(frame.x, frame.y, frame.width, frame.height);
+                        _saved_frames[id] = frame;
+                        _windows.erase(win_it);
+                    }
+                });
+            });
 
             return {control::ControlStatus::OK, {0, 0, rect.width, rect.height}};
         };

@@ -18,6 +18,7 @@
  */
 
 #import <Cocoa/Cocoa.h>
+#include <algorithm>
 #include <vector>
 
 #include "elklog/static_logger.h"
@@ -74,6 +75,16 @@ ELKLOG_GET_LOGGER_WITH_MODULE_NAME("jsfx_editor");
 
         memset(&_gfxInput, 0, sizeof(_gfxInput));
 
+        libjsfx_metadata_t metadata {};
+        int channel_count = 2;
+        if (libjsfx_get_metadata(_effect, &metadata) == LIBJSFX_OK)
+        {
+            channel_count = std::max(1, std::max(metadata.num_inputs, metadata.num_outputs));
+        }
+        std::vector<double> silence(static_cast<size_t>(channel_count) * 512u, 0.0);
+        libjsfx_process(_effect, silence.data(), 512, channel_count);
+        libjsfx_trigger_slider(_effect);
+
         _timer = nil;
     }
     return self;
@@ -114,7 +125,10 @@ ELKLOG_GET_LOGGER_WITH_MODULE_NAME("jsfx_editor");
         return;
     }
 
-    libjsfx_render_gfx(_effect, &_framebuffer, &_gfxInput);
+    if (libjsfx_render_gfx(_effect, &_framebuffer, &_gfxInput) != LIBJSFX_OK)
+    {
+        return;
+    }
     _gfxInput.mouse_wheel = 0;
 
     [self setNeedsDisplay:YES];

@@ -28,6 +28,7 @@
 namespace sushi::internal::vst3 {
 
 using WindowResizeCallback = std::function<void(int width, int height)>;
+using WindowCloseCallback = std::function<void()>;
 
 class PluginWindow
 {
@@ -44,6 +45,7 @@ public:
     void close();
     bool is_open() const;
     void set_resize_callback(WindowResizeCallback callback);
+    void set_close_callback(WindowCloseCallback callback);
     void set_position(int x, int y);
     void get_frame(int& x, int& y, int& width, int& height) const;
     bool capture_screenshot(const std::string& output_path, int max_width = 0, int max_height = 0) const;

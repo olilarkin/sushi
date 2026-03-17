@@ -26,24 +26,27 @@
 
 // Forward-declare the C++ callback type for the delegate
 using ResizeFn = std::function<void(int, int)>;
+using CloseFn = std::function<void()>;
 
 @interface SushiWindowDelegate : NSObject <NSWindowDelegate>
 {
     ResizeFn _callback;
+    CloseFn _closeCallback;
 }
 
-- (instancetype)initWithCallback:(ResizeFn)callback;
+- (instancetype)initWithCallback:(ResizeFn)callback closeCallback:(CloseFn)closeCallback;
 
 @end
 
 @implementation SushiWindowDelegate
 
-- (instancetype)initWithCallback:(ResizeFn)callback
+- (instancetype)initWithCallback:(ResizeFn)callback closeCallback:(CloseFn)closeCallback
 {
     self = [super init];
     if (self)
     {
         _callback = std::move(callback);
+        _closeCallback = std::move(closeCallback);
     }
     return self;
 }
@@ -58,6 +61,15 @@ using ResizeFn = std::function<void(int, int)>;
     NSWindow* win = notification.object;
     NSRect content = [[win contentView] frame];
     _callback(static_cast<int>(content.size.width), static_cast<int>(content.size.height));
+}
+
+- (void)windowWillClose:(NSNotification*)notification
+{
+    (void)notification;
+    if (_closeCallback)
+    {
+        _closeCallback();
+    }
 }
 
 @end
@@ -86,6 +98,7 @@ struct PluginWindow::Impl
     SushiWindowDelegate* delegate{nil};
     bool open{false};
     WindowResizeCallback resize_callback;
+    WindowCloseCallback close_callback;
 };
 
 PluginWindow::PluginWindow() : _impl(std::make_unique<Impl>())
@@ -120,6 +133,13 @@ void* PluginWindow::create(const std::string& title, int width, int height, bool
             if (_impl->resize_callback)
             {
                 _impl->resize_callback(w, h);
+            }
+        }
+        closeCallback:[this]() {
+            _impl->open = false;
+            if (_impl->close_callback)
+            {
+                _impl->close_callback();
             }
         }];
     [win setDelegate:delegate];
@@ -183,6 +203,11 @@ bool PluginWindow::is_open() const
 void PluginWindow::set_resize_callback(WindowResizeCallback callback)
 {
     _impl->resize_callback = std::move(callback);
+}
+
+void PluginWindow::set_close_callback(WindowCloseCallback callback)
+{
+    _impl->close_callback = std::move(callback);
 }
 
 void PluginWindow::set_position(int x, int y)

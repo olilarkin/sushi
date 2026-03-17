@@ -46,6 +46,8 @@ bool PluginWindow::is_open() const
 
 void PluginWindow::set_resize_callback(WindowResizeCallback /*callback*/) {}
 
+void PluginWindow::set_close_callback(WindowCloseCallback /*callback*/) {}
+
 void PluginWindow::set_position(int /*x*/, int /*y*/) {}
 
 void PluginWindow::get_frame(int& x, int& y, int& width, int& height) const
