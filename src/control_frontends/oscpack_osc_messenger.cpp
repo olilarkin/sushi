@@ -79,7 +79,8 @@ bool OscpackOscMessenger::init()
     try
     {
         _receive_socket = std::make_unique<UdpListeningReceiveSocket>(IpEndpointName(IpEndpointName::ANY_ADDRESS, _receive_port),
-                                                                      this);
+                                                                      this,
+                                                                      true);
     }
     catch ([[maybe_unused]] std::exception& e)
     {
@@ -162,23 +163,44 @@ void OscpackOscMessenger::delete_method(void* handle)
 
 void OscpackOscMessenger::send(const char* address_pattern, float payload)
 {
-    oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
-    p << oscpack::BeginMessage(address_pattern) << payload  << oscpack::EndMessage;
-    _transmit_socket->Send(p.Data(), p.Size());
+    try
+    {
+        oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
+        p << oscpack::BeginMessage(address_pattern) << payload << oscpack::EndMessage;
+        _transmit_socket->Send(p.Data(), p.Size());
+    }
+    catch (const oscpack::Exception& e)
+    {
+        ELKLOG_LOG_WARNING("Failed to send OSC message {}: {}", address_pattern, e.what());
+    }
 }
 
 void OscpackOscMessenger::send(const char* address_pattern, int payload)
 {
-    oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
-    p << oscpack::BeginMessage(address_pattern) << payload  << oscpack::EndMessage;
-    _transmit_socket->Send(p.Data(), p.Size());
+    try
+    {
+        oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
+        p << oscpack::BeginMessage(address_pattern) << payload << oscpack::EndMessage;
+        _transmit_socket->Send(p.Data(), p.Size());
+    }
+    catch (const oscpack::Exception& e)
+    {
+        ELKLOG_LOG_WARNING("Failed to send OSC message {}: {}", address_pattern, e.what());
+    }
 }
 
 void OscpackOscMessenger::send(const char* address_pattern, const std::string& payload)
 {
-    oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
-    p << oscpack::BeginMessage(address_pattern) << payload.c_str()  << oscpack::EndMessage;
-    _transmit_socket->Send(p.Data(), p.Size());
+    try
+    {
+        oscpack::OutboundPacketStream p(_output_buffer, OSC_OUTPUT_BUFFER_SIZE);
+        p << oscpack::BeginMessage(address_pattern) << payload.c_str() << oscpack::EndMessage;
+        _transmit_socket->Send(p.Data(), p.Size());
+    }
+    catch (const oscpack::Exception& e)
+    {
+        ELKLOG_LOG_WARNING("Failed to send OSC message {}: {}", address_pattern, e.what());
+    }
 }
 
 void OscpackOscMessenger::ProcessMessage(const oscpack::ReceivedMessage& m, const IpEndpointName& /*remoteEndpoint*/)
