@@ -716,14 +716,23 @@ bool Vst3xWrapper::_register_parameters()
                 ELKLOG_LOG_INFO("We have a program change parameter at {}", info.id);
             }
             else if (info.stepCount > 0 &&
-                     register_parameter(new IntParameterDescriptor(_make_unique_parameter_name(param_name),
-                                                                   param_name,
-                                                                   param_unit,
-                                                                   0,
-                                                                   info.stepCount,
-                                                                   direction,
-                                                                   nullptr),
-                                        info.id))
+                     [&]() {
+                        auto* descriptor = new IntParameterDescriptor(_make_unique_parameter_name(param_name),
+                                                                      param_name,
+                                                                      param_unit,
+                                                                      0,
+                                                                      info.stepCount,
+                                                                      direction,
+                                                                      nullptr);
+                        descriptor->set_enumeration(
+                            (info.flags & Steinberg::Vst::ParameterInfo::kIsList) != 0);
+                        if (register_parameter(descriptor, info.id))
+                        {
+                            return true;
+                        }
+                        delete descriptor;
+                        return false;
+                     }())
             {
                 ELKLOG_LOG_INFO("Registered INT parameter {}, id {}", param_name, info.id);
             }
@@ -885,6 +894,10 @@ bool Vst3xWrapper::_setup_event_buses()
     if (input_buses > 0)
     {
         _supports_midi_input = true;
+    }
+    if (output_buses > 0)
+    {
+        _supports_midi_output = true;
     }
     /* Try to activate all buses here */
     for (int i = 0; i < input_buses; ++i)

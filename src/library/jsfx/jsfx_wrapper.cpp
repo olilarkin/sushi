@@ -16,6 +16,7 @@
 #include "jsfx_wrapper.h"
 
 #include <cstring>
+#include <utility>
 
 #include "elklog/static_logger.h"
 
@@ -27,6 +28,74 @@ namespace sushi::internal::jsfx_wrapper {
 namespace {
 
 ELKLOG_GET_LOGGER_WITH_MODULE_NAME("jsfx");
+
+std::string get_directory(const std::string& path)
+{
+    size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        return ".";
+    }
+    return path.substr(0, pos);
+}
+
+std::string detect_reaper_structure(const std::string& path, std::string& relative_path)
+{
+    static constexpr const char* effects_markers[] = { "/Effects/", "\\Effects\\" };
+
+    for (const char* marker : effects_markers) {
+        size_t pos = path.find(marker);
+        if (pos != std::string::npos) {
+            std::string root = path.substr(0, pos);
+            relative_path = path.substr(pos + std::strlen(marker));
+            return root;
+        }
+    }
+
+    if (path.size() >= 8) {
+        std::string suffix = path.substr(path.size() - 8);
+        if (suffix == "/Effects" || suffix == "\\Effects") {
+            return path.substr(0, path.size() - 8);
+        }
+    }
+
+    return "";
+}
+
+bool is_absolute_path(const std::string& path)
+{
+    if (path.empty()) return false;
+    if (path[0] == '/') return true;
+    return path.size() >= 3 && path[1] == ':' && (path[2] == '/' || path[2] == '\\');
+}
+
+std::pair<std::string, std::string> resolve_jsfx_paths(const std::string& script_path)
+{
+    if (script_path.empty()) {
+        return {".", ""};
+    }
+
+    std::string data_path;
+    std::string effect_path = script_path;
+
+    if (is_absolute_path(effect_path)) {
+        std::string relative_path;
+        std::string detected_root = detect_reaper_structure(effect_path, relative_path);
+        if (!detected_root.empty()) {
+            data_path = detected_root;
+            effect_path = relative_path;
+        } else {
+            data_path = get_directory(effect_path);
+        }
+    } else {
+        data_path = get_directory(effect_path);
+    }
+
+    if (data_path.empty()) {
+        data_path = ".";
+    }
+
+    return {data_path, effect_path};
+}
 
 MidiDataByte make_midi_bytes(const RtEvent& event)
 {
@@ -95,7 +164,17 @@ ProcessorReturnCode JsfxWrapper::init(float sample_rate)
 {
     _sample_rate = sample_rate;
 
-    _context = libjsfx_init(nullptr);
+    std::string data_path = ".";
+    _effect_path = _plugin_info.path;
+    if (!_plugin_info.source_code.empty()) {
+        if (!_plugin_info.path.empty()) {
+            data_path = get_directory(_plugin_info.path);
+        }
+    } else {
+        std::tie(data_path, _effect_path) = resolve_jsfx_paths(_plugin_info.path);
+    }
+
+    _context = libjsfx_init(data_path.c_str());
     if (!_context)
     {
         ELKLOG_LOG_ERROR("Failed to initialize libjsfx context");
@@ -377,7 +456,7 @@ libjsfx_effect_t* JsfxWrapper::_create_effect(int sample_rate)
 
     if (!_plugin_info.path.empty())
     {
-        return libjsfx_create_effect(_context, _plugin_info.path.c_str(), sample_rate);
+        return libjsfx_create_effect(_context, _effect_path.c_str(), sample_rate);
     }
 
     return nullptr;

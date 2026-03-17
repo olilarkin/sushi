@@ -51,11 +51,37 @@ ELKLOG_GET_LOGGER_WITH_MODULE_NAME("vst3");
 
 constexpr char HOST_NAME[] = "Sushi";
 
+SushiHostApplication::SushiHostApplication(Vst3xWrapper* wrapper_instance) : Steinberg::Vst::HostApplication(),
+                                                                              _wrapper_instance(wrapper_instance)
+{
+    auto* support = getPlugInterfaceSupport();
+    if (!support) {
+        return;
+    }
+
+    support->addPlugInterfaceSupported(Steinberg::Vst::IParameterFinder::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IAudioPresentationLatency::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IKeyswitchController::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IContextMenuTarget::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IEditControllerHostEditing::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IXmlRepresentationController::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::INoteExpressionController::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::ChannelContext::IInfoListener::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IPrefetchableSupport::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IAutomationState::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::INoteExpressionPhysicalUIMapping::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IMidiLearn::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IProcessContextRequirements::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IParameterFunctionName::iid);
+    support->addPlugInterfaceSupported(Steinberg::Vst::IProgress::iid);
+}
+
 Steinberg::tresult SushiHostApplication::queryInterface(const char* iid, void** obj)
 {
     DEF_INTERFACE (elk::IElkHostExtension);
     return HostApplication::queryInterface(iid, obj);
 }
+
 
 Steinberg::tresult SushiHostApplication::getName(Steinberg::Vst::String128 name)
 
@@ -445,15 +471,19 @@ Steinberg::Vst::IComponent* load_component(Steinberg::IPluginFactory* factory,
     {
         Steinberg::PClassInfo info;
         factory->getClassInfo(i, &info);
+        const Steinberg::FUID class_id(info.cid);
+        char class_id_buffer[33] = {};
+        class_id.toString(class_id_buffer);
+        const std::string class_id_string = class_id_buffer;
         ELKLOG_LOG_INFO("Querying plugin {} of type {}", info.name, info.category);
-        if (info.name == plugin_name)
+        if (info.name == plugin_name || class_id_string == plugin_name)
         {
             Steinberg::Vst::IComponent* component;
             auto res = factory->createInstance(info.cid, Steinberg::Vst::IComponent::iid,
                                                reinterpret_cast<void**>(&component));
             if (res == Steinberg::kResultOk)
             {
-                ELKLOG_LOG_INFO("Creating plugin {}", info.name);
+                ELKLOG_LOG_INFO("Creating plugin {} ({})", info.name, class_id_string);
                 return component;
             }
             ELKLOG_LOG_ERROR("Failed to create component with error code: {}", res);

@@ -216,7 +216,7 @@ std::string ClapPluginInstance::_resolve_library_path(const std::string& plugin_
     return plugin_path;
 }
 
-bool ClapPluginInstance::load_plugin(const std::string& plugin_path, int plugin_index, const clap_host_t* host)
+bool ClapPluginInstance::load_plugin(const std::string& plugin_path, const std::string& plugin_id, const clap_host_t* host)
 {
     auto lib_path = _resolve_library_path(plugin_path);
 
@@ -257,20 +257,50 @@ bool ClapPluginInstance::load_plugin(const std::string& plugin_path, int plugin_
         return false;
     }
 
-    if (plugin_index < 0 || static_cast<uint32_t>(plugin_index) >= plugin_count)
+    const clap_plugin_descriptor_t* desc = nullptr;
+    uint32_t descriptor_index = 0;
+
+    if (plugin_id.empty())
     {
-        ELKLOG_LOG_ERROR("Plugin index {} out of range (0-{})", plugin_index, plugin_count - 1);
-        return false;
+        desc = _factory->get_plugin_descriptor(_factory, 0);
+    }
+    else
+    {
+        for (uint32_t index = 0; index < plugin_count; ++index)
+        {
+            auto* candidate = _factory->get_plugin_descriptor(_factory, index);
+            if (candidate && candidate->id && plugin_id == candidate->id)
+            {
+                desc = candidate;
+                descriptor_index = index;
+                break;
+            }
+        }
+
+        if (!desc)
+        {
+            try
+            {
+                descriptor_index = static_cast<uint32_t>(std::stoul(plugin_id));
+            }
+            catch (...)
+            {
+                descriptor_index = plugin_count;
+            }
+            if (descriptor_index < plugin_count)
+            {
+                desc = _factory->get_plugin_descriptor(_factory, descriptor_index);
+            }
+        }
     }
 
-    auto* desc = _factory->get_plugin_descriptor(_factory, static_cast<uint32_t>(plugin_index));
     if (!desc)
     {
-        ELKLOG_LOG_ERROR("Failed to get plugin descriptor at index {}", plugin_index);
+        ELKLOG_LOG_ERROR("Failed to resolve CLAP plugin '{}' in {}", plugin_id, plugin_path);
         return false;
     }
 
-    ELKLOG_LOG_INFO("Loading CLAP plugin: {} ({})", desc->name, desc->id);
+    ELKLOG_LOG_INFO("Loading CLAP plugin: {} ({}) at index {}", desc->name, desc->id, descriptor_index);
 
     _plugin = _factory->create_plugin(_factory, host, desc->id);
     if (!_plugin)

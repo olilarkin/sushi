@@ -125,6 +125,7 @@ struct ParameterInfo
     bool            automatable;
     float           min_domain_value;
     float           max_domain_value;
+    bool            is_enumeration{false};
 };
 
 struct PropertyInfo
@@ -145,6 +146,7 @@ struct ProcessorInfo
     int         input_channels{0};
     int         output_channels{0};
     bool        supports_midi_input{false};
+    bool        supports_midi_output{false};
 };
 
 struct ProgramInfo

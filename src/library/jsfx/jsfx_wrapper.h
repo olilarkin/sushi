@@ -53,6 +53,7 @@ private:
     libjsfx_effect_t* _create_effect(int sample_rate);
 
     PluginInfo _plugin_info;
+    std::string _effect_path;
     libjsfx_context_t* _context {nullptr};
     libjsfx_effect_t* _effect {nullptr};
     float _sample_rate {44100.0f};

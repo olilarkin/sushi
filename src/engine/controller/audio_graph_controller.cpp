@@ -40,7 +40,8 @@ inline control::ProcessorInfo to_external(const Processor* proc)
                                   .type = to_external(proc->info().type),
                                   .input_channels = proc->max_input_channels(),
                                   .output_channels = proc->max_output_channels(),
-                                  .supports_midi_input = proc->supports_midi_input()};
+                                  .supports_midi_input = proc->supports_midi_input(),
+                                  .supports_midi_output = proc->supports_midi_output()};
 }
 
 inline control::TrackInfo to_external(const Track* track, std::vector<int> proc_ids)
@@ -376,7 +377,6 @@ control::ControlResponse AudioGraphController::create_processor_on_track(const s
         }
         return map_status(status);
     };
-
     std::unique_ptr<Event> event(new LambdaEvent(std::move(lambda), IMMEDIATE_PROCESS));
     return {control::ControlStatus::ASYNC_RESPONSE, _sender->send_with_completion_notification(std::move(event))};
 }

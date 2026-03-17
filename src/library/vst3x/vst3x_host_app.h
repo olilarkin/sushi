@@ -38,7 +38,17 @@ ELK_DISABLE_SHORTEN_64_TO_32
 #include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
+#include "pluginterfaces/vst/ivstautomationstate.h"
+#include "pluginterfaces/vst/ivstchannelcontextinfo.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
+#include "pluginterfaces/vst/ivstcontextmenu.h"
+#include "pluginterfaces/vst/ivstmidilearn.h"
+#include "pluginterfaces/vst/ivstnoteexpression.h"
+#include "pluginterfaces/vst/ivstparameterfunctionname.h"
+#include "pluginterfaces/vst/ivstphysicalui.h"
+#include "pluginterfaces/vst/ivstplugview.h"
+#include "pluginterfaces/vst/ivstprefetchablesupport.h"
+#include "pluginterfaces/vst/ivstrepresentation.h"
 #include "public.sdk/source/vst/hosting/module.h"
 #include "base/source/fobject.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
@@ -60,8 +70,7 @@ class SushiHostApplication : public Steinberg::Vst::HostApplication, public elk:
 public:
     SUSHI_DECLARE_NON_COPYABLE(SushiHostApplication);
 
-    SushiHostApplication(Vst3xWrapper* wrapper_instance) : Steinberg::Vst::HostApplication(),
-                                                           _wrapper_instance(wrapper_instance) {}
+    SushiHostApplication(Vst3xWrapper* wrapper_instance);
 
     Steinberg::tresult PLUGIN_API queryInterface (const Steinberg::TUID iid, void** obj) override;
 

@@ -84,7 +84,7 @@ public:
 
     ClapWrapper(HostControl host_control,
                 const std::string& plugin_path,
-                int plugin_index,
+                const std::string& plugin_id,
                 ClapHostContext* host_context);
 
     ~ClapWrapper() override;
@@ -139,7 +139,7 @@ private:
     BypassManager _bypass_manager{_bypassed};
 
     std::string _plugin_load_path;
-    int _plugin_index{0};
+    std::string _plugin_id;
 
     ClapHostContext* _host_context;
     ClapPluginInstance _instance;

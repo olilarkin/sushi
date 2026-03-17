@@ -17,6 +17,7 @@
  * @brief Wrapper for Audio Unit V2 plugins.
  */
 
+#include <cmath>
 #include <cstring>
 
 #import <CoreFoundation/CoreFoundation.h>
@@ -30,6 +31,70 @@
 #include "library/event.h"
 
 namespace sushi::internal::auv2_wrapper {
+
+namespace {
+
+std::string cfStringToStdString(CFStringRef string)
+{
+    if (!string) return {};
+
+    const auto length = CFStringGetLength(string);
+    const auto maxBytes = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+    std::string result(static_cast<size_t>(maxBytes), '\0');
+    if (!CFStringGetCString(string, result.data(), maxBytes, kCFStringEncodingUTF8)) {
+        return {};
+    }
+    result.resize(std::strlen(result.c_str()));
+    return result;
+}
+
+std::string formatParameterValue(AudioUnit audio_unit,
+                                 AudioUnitParameterID parameter_id,
+                                 AudioUnitParameterValue value)
+{
+    AudioUnitParameterStringFromValue request{parameter_id, &value, nullptr};
+    UInt32 size = sizeof(request);
+    OSStatus status = AudioUnitGetProperty(audio_unit,
+                                           kAudioUnitProperty_ParameterStringFromValue,
+                                           kAudioUnitScope_Global,
+                                           0,
+                                           &request,
+                                           &size);
+    if (status == noErr && request.outString) {
+        auto result = cfStringToStdString(request.outString);
+        CFRelease(request.outString);
+        if (!result.empty()) return result;
+    }
+
+    AudioUnitParameter parameter{audio_unit, parameter_id, kAudioUnitScope_Global, 0};
+    char buffer[64] = {};
+    if (AUParameterFormatValue(static_cast<Float64>(value), &parameter, buffer, 4)) {
+        return std::string(buffer);
+    }
+
+    return std::to_string(value);
+}
+
+int getParameterValueStringCount(AudioUnit audio_unit, AudioUnitParameterID parameter_id)
+{
+    CFArrayRef value_strings = nullptr;
+    UInt32 size = sizeof(value_strings);
+    OSStatus status = AudioUnitGetProperty(audio_unit,
+                                           kAudioUnitProperty_ParameterValueStrings,
+                                           kAudioUnitScope_Global,
+                                           parameter_id,
+                                           &value_strings,
+                                           &size);
+    if (status != noErr || !value_strings) {
+        return 0;
+    }
+
+    const int count = static_cast<int>(CFArrayGetCount(value_strings));
+    CFRelease(value_strings);
+    return count;
+}
+
+} // namespace
 
 ELKLOG_GET_LOGGER_WITH_MODULE_NAME("auv2");
 
@@ -96,6 +161,7 @@ ProcessorReturnCode AUv2Wrapper::init(float sample_rate)
 
     _is_instrument = (_component_desc.componentType == kAudioUnitType_MusicDevice ||
                       _component_desc.componentType == kAudioUnitType_MusicEffect);
+    _supports_midi_input = _is_instrument;
 
     AudioComponent component = AudioComponentFindNext(nullptr, &_component_desc);
     if (!component)
@@ -109,6 +175,34 @@ ProcessorReturnCode AUv2Wrapper::init(float sample_rate)
     {
         ELKLOG_LOG_ERROR("Failed to create AUv2 instance for uid '{}', status: {}", _uid, status);
         return ProcessorReturnCode::PLUGIN_LOAD_ERROR;
+    }
+
+    UInt32 bus_count_size = sizeof(UInt32);
+    _input_bus_count = 0;
+    status = AudioUnitGetProperty(_audio_unit,
+                                  kAudioUnitProperty_ElementCount,
+                                  kAudioUnitScope_Input,
+                                  0,
+                                  &_input_bus_count,
+                                  &bus_count_size);
+    if (status != noErr)
+    {
+        ELKLOG_LOG_WARNING("Failed to query AUv2 input bus count for '{}', status: {}", _uid, status);
+        _input_bus_count = _is_instrument ? 0u : 1u;
+    }
+
+    bus_count_size = sizeof(UInt32);
+    _output_bus_count = 0;
+    status = AudioUnitGetProperty(_audio_unit,
+                                  kAudioUnitProperty_ElementCount,
+                                  kAudioUnitScope_Output,
+                                  0,
+                                  &_output_bus_count,
+                                  &bus_count_size);
+    if (status != noErr)
+    {
+        ELKLOG_LOG_WARNING("Failed to query AUv2 output bus count for '{}', status: {}", _uid, status);
+        _output_bus_count = 1u;
     }
 
     // Get the component name
@@ -181,20 +275,27 @@ ProcessorReturnCode AUv2Wrapper::init(float sample_rate)
 
     AudioStreamBasicDescription input_format{};
     format_size = sizeof(input_format);
-    status = AudioUnitGetProperty(_audio_unit,
-                                  kAudioUnitProperty_StreamFormat,
-                                  kAudioUnitScope_Input,
-                                  0,
-                                  &input_format,
-                                  &format_size);
-    if (status == noErr)
+    if (_input_bus_count > 0)
     {
-        _max_input_channels = std::min(static_cast<int>(input_format.mChannelsPerFrame),
-                                       AUV2_WRAPPER_MAX_N_CHANNELS);
+        status = AudioUnitGetProperty(_audio_unit,
+                                      kAudioUnitProperty_StreamFormat,
+                                      kAudioUnitScope_Input,
+                                      0,
+                                      &input_format,
+                                      &format_size);
+        if (status == noErr)
+        {
+            _max_input_channels = std::min(static_cast<int>(input_format.mChannelsPerFrame),
+                                           AUV2_WRAPPER_MAX_N_CHANNELS);
+        }
+        else
+        {
+            _max_input_channels = 2;
+        }
     }
     else
     {
-        _max_input_channels = 2;
+        _max_input_channels = 0;
     }
 
     ELKLOG_LOG_INFO("AUv2 plugin '{}' channels: {} in, {} out", _uid, _max_input_channels, _max_output_channels);
@@ -238,28 +339,33 @@ bool AUv2Wrapper::_setup_stream_format(float sample_rate)
     format.mBytesPerFrame = 4;
     format.mBytesPerPacket = 4;
 
-    // Set output format
-    OSStatus status = AudioUnitSetProperty(_audio_unit,
-                                           kAudioUnitProperty_StreamFormat,
-                                           kAudioUnitScope_Output,
-                                           0,
-                                           &format,
-                                           sizeof(format));
-    if (status != noErr)
+    OSStatus status = noErr;
+    if (_output_bus_count > 0)
     {
-        ELKLOG_LOG_WARNING("Failed to set output stream format, status: {}", status);
+        status = AudioUnitSetProperty(_audio_unit,
+                                      kAudioUnitProperty_StreamFormat,
+                                      kAudioUnitScope_Output,
+                                      0,
+                                      &format,
+                                      sizeof(format));
+        if (status != noErr)
+        {
+            ELKLOG_LOG_WARNING("Failed to set output stream format, status: {}", status);
+        }
     }
 
-    // Set input format
-    status = AudioUnitSetProperty(_audio_unit,
-                                  kAudioUnitProperty_StreamFormat,
-                                  kAudioUnitScope_Input,
-                                  0,
-                                  &format,
-                                  sizeof(format));
-    if (status != noErr)
+    if (_input_bus_count > 0)
     {
-        ELKLOG_LOG_WARNING("Failed to set input stream format, status: {}", status);
+        status = AudioUnitSetProperty(_audio_unit,
+                                      kAudioUnitProperty_StreamFormat,
+                                      kAudioUnitScope_Input,
+                                      0,
+                                      &format,
+                                      sizeof(format));
+        if (status != noErr)
+        {
+            ELKLOG_LOG_WARNING("Failed to set input stream format, status: {}", status);
+        }
     }
 
     return true;
@@ -267,6 +373,11 @@ bool AUv2Wrapper::_setup_stream_format(float sample_rate)
 
 bool AUv2Wrapper::_set_render_callback()
 {
+    if (_input_bus_count == 0)
+    {
+        return true;
+    }
+
     AURenderCallbackStruct callback_struct{};
     callback_struct.inputProc = _render_callback;
     callback_struct.inputProcRefCon = this;
@@ -609,34 +720,35 @@ std::pair<ProcessorReturnCode, std::string> AUv2Wrapper::parameter_value_formatt
                                             &value);
     if (status == noErr)
     {
-        // Try to get the value string from the AU
-        AudioUnitParameterInfo param_info{};
-        UInt32 info_size = sizeof(param_info);
-        OSStatus info_status = AudioUnitGetProperty(_audio_unit,
-                                                     kAudioUnitProperty_ParameterInfo,
-                                                     kAudioUnitScope_Global,
-                                                     it->second,
-                                                     &param_info,
-                                                     &info_size);
-        if (info_status == noErr && (param_info.flags & kAudioUnitParameterFlag_HasCFNameString))
-        {
-            // For display, just format the value with the unit name
-            std::string unit_str;
-            if (param_info.unitName)
-            {
-                char unit_buf[64];
-                if (CFStringGetCString(param_info.unitName, unit_buf, sizeof(unit_buf), kCFStringEncodingUTF8))
-                {
-                    unit_str = std::string(" ") + unit_buf;
-                }
-                CFRelease(param_info.unitName);
-            }
-            return {ProcessorReturnCode::OK, std::to_string(value) + unit_str};
-        }
-
-        return {ProcessorReturnCode::OK, std::to_string(value)};
+        return {ProcessorReturnCode::OK, formatParameterValue(_audio_unit, it->second, value)};
     }
     return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+}
+
+std::pair<ProcessorReturnCode, std::string>
+AUv2Wrapper::parameter_value_formatted(ObjectId parameter_id, float normalized_value) const
+{
+    auto it = _sushi_to_au_param.find(parameter_id);
+    if (it == _sushi_to_au_param.end())
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    auto* descriptor = parameter_from_id(parameter_id);
+    if (!descriptor)
+    {
+        return {ProcessorReturnCode::PARAMETER_NOT_FOUND, ""};
+    }
+
+    auto domain_value = descriptor->min_domain_value() +
+                        normalized_value * (descriptor->max_domain_value() - descriptor->min_domain_value());
+    if (descriptor->type() == ParameterType::INT || descriptor->type() == ParameterType::BOOL)
+    {
+        domain_value = std::round(domain_value);
+    }
+
+    return {ProcessorReturnCode::OK,
+            formatParameterValue(_audio_unit, it->second, static_cast<AudioUnitParameterValue>(domain_value))};
 }
 
 ProcessorReturnCode AUv2Wrapper::set_state(ProcessorState* state, bool /*realtime_running*/)
@@ -869,18 +981,41 @@ bool AUv2Wrapper::_register_parameters()
 
         ParameterDescriptor* descriptor = nullptr;
 
-        if (param_info.unit == kAudioUnitParameterUnit_Boolean ||
-            param_info.unit == kAudioUnitParameterUnit_Indexed)
+        const bool is_boolean = param_info.unit == kAudioUnitParameterUnit_Boolean;
+        const bool has_value_strings =
+            (param_info.flags & kAudioUnitParameterFlag_ValuesHaveStrings) != 0;
+        const bool is_indexed = param_info.unit == kAudioUnitParameterUnit_Indexed;
+        const int value_string_count = getParameterValueStringCount(_audio_unit, param_ids[i]);
+        const bool is_enumeration = is_indexed || value_string_count > 1;
+        const bool is_discrete_integer = is_enumeration || has_value_strings;
+
+        if (is_boolean)
         {
-            int min = static_cast<int>(param_info.minValue);
-            int max = static_cast<int>(param_info.maxValue);
-            descriptor = new IntParameterDescriptor(unique_name,
+            descriptor = new BoolParameterDescriptor(unique_name,
                                                      param_name,
                                                      unit,
-                                                     min,
-                                                     max,
+                                                     false,
+                                                     true,
                                                      direction,
                                                      nullptr);
+        }
+        else if (is_discrete_integer)
+        {
+            int min = static_cast<int>(std::lround(param_info.minValue));
+            int max = static_cast<int>(std::lround(param_info.maxValue));
+            if (value_string_count > 1) {
+                max = min + value_string_count - 1;
+            }
+            if (max < min) {
+                max = min;
+            }
+            descriptor = new IntParameterDescriptor(unique_name,
+                                                    param_name,
+                                                    unit,
+                                                    min,
+                                                    max,
+                                                    direction,
+                                                    nullptr);
         }
         else
         {
@@ -892,6 +1027,8 @@ bool AUv2Wrapper::_register_parameters()
                                                        direction,
                                                        nullptr);
         }
+
+        descriptor->set_enumeration(is_enumeration);
 
         auto sushi_id = static_cast<ObjectId>(this->all_parameters().size());
         if (register_parameter(descriptor, sushi_id))

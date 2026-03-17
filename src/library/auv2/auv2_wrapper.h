@@ -79,6 +79,8 @@ public:
     std::pair<ProcessorReturnCode, float> parameter_value_in_domain(ObjectId parameter_id) const override;
 
     std::pair<ProcessorReturnCode, std::string> parameter_value_formatted(ObjectId parameter_id) const override;
+    std::pair<ProcessorReturnCode, std::string>
+    parameter_value_formatted(ObjectId parameter_id, float normalized_value) const override;
 
     ProcessorReturnCode set_state(ProcessorState* state, bool realtime_running) override;
 
@@ -118,6 +120,8 @@ private:
     AudioComponentDescription _component_desc{};
 
     bool _is_instrument{false};
+    UInt32 _input_bus_count{0};
+    UInt32 _output_bus_count{0};
 
     // Bidirectional parameter maps
     std::map<AudioUnitParameterID, ObjectId> _au_to_sushi_param;

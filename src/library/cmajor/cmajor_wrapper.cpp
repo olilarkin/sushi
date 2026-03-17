@@ -1174,6 +1174,10 @@ ProcessorReturnCode CmajorWrapper::_compile_program_source(const std::string& so
     runtime->output_endpoints = engine.getOutputEndpoints();
     runtime->max_input_channels = count_audio_channels(runtime->input_endpoints);
     runtime->max_output_channels = count_audio_channels(runtime->output_endpoints);
+    _supports_midi_input = std::any_of(runtime->input_endpoints.begin(), runtime->input_endpoints.end(),
+                                       [] (const auto& endpoint) { return endpoint.isMIDI(); });
+    _supports_midi_output = std::any_of(runtime->output_endpoints.begin(), runtime->output_endpoints.end(),
+                                        [] (const auto& endpoint) { return endpoint.isMIDI(); });
 
     auto connected_input_channels = std::min(_requested_input_channels, runtime->max_input_channels);
     auto connected_output_channels = std::min(_requested_output_channels, runtime->max_output_channels);
@@ -1404,6 +1408,10 @@ ProcessorReturnCode CmajorWrapper::_compile_patch_source(const std::string& sour
     runtime->output_endpoints = runtime->patch->getOutputEndpoints();
     runtime->max_input_channels = count_audio_channels(runtime->input_endpoints);
     runtime->max_output_channels = count_audio_channels(runtime->output_endpoints);
+    _supports_midi_input = std::any_of(runtime->input_endpoints.begin(), runtime->input_endpoints.end(),
+                                       [] (const auto& endpoint) { return endpoint.isMIDI(); });
+    _supports_midi_output = std::any_of(runtime->output_endpoints.begin(), runtime->output_endpoints.end(),
+                                        [] (const auto& endpoint) { return endpoint.isMIDI(); });
     runtime->build_log = runtime->patch->getLastBuildLog();
 
     for (const auto& parameter : runtime->patch->getParameterList())

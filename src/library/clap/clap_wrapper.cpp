@@ -97,11 +97,11 @@ bool ClapEventList::_output_try_push(const clap_output_events_t* list, const cla
 
 ClapWrapper::ClapWrapper(HostControl host_control,
                          const std::string& plugin_path,
-                         int plugin_index,
+                         const std::string& plugin_id,
                          ClapHostContext* host_context) :
         Processor(host_control),
         _plugin_load_path(plugin_path),
-        _plugin_index(plugin_index),
+        _plugin_id(plugin_id),
         _host_context(host_context)
 {
     _max_input_channels = CLAP_WRAPPER_MAX_N_CHANNELS;
@@ -132,7 +132,7 @@ ProcessorReturnCode ClapWrapper::init(float sample_rate)
     _sample_rate = sample_rate;
     auto abs_path = _host_control.to_absolute_path(_plugin_load_path);
 
-    if (!_instance.load_plugin(abs_path, _plugin_index, _host_context->host()))
+    if (!_instance.load_plugin(abs_path, _plugin_id, _host_context->host()))
     {
         return ProcessorReturnCode::PLUGIN_LOAD_ERROR;
     }
@@ -147,6 +147,12 @@ ProcessorReturnCode ClapWrapper::init(float sample_rate)
     if (!_setup_audio_ports())
     {
         return ProcessorReturnCode::PLUGIN_INIT_ERROR;
+    }
+
+    if (_instance.note_ports())
+    {
+        _supports_midi_input = _instance.note_ports()->count(_instance.plugin(), true) > 0;
+        _supports_midi_output = _instance.note_ports()->count(_instance.plugin(), false) > 0;
     }
 
     if (!_instance.activate(sample_rate, 1, AUDIO_CHUNK_SIZE))

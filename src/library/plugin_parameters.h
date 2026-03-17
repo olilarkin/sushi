@@ -110,12 +110,16 @@ public:
      */
     virtual float max_domain_value() const {return 1;}
 
+    bool is_enumeration() const { return _is_enumeration; }
+    void set_enumeration(bool is_enumeration) { _is_enumeration = is_enumeration; }
+
 protected:
     std::string _label;
     std::string _name;
     std::string _unit;
     ObjectId _id {0};
     ParameterType _type;
+    bool _is_enumeration {false};
 };
 
 

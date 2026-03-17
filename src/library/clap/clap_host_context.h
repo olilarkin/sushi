@@ -85,7 +85,7 @@ public:
     ClapPluginInstance() = default;
     ~ClapPluginInstance();
 
-    bool load_plugin(const std::string& plugin_path, int plugin_index, const clap_host_t* host);
+    bool load_plugin(const std::string& plugin_path, const std::string& plugin_id, const clap_host_t* host);
 
     bool activate(double sample_rate, uint32_t min_frames, uint32_t max_frames);
     void deactivate();

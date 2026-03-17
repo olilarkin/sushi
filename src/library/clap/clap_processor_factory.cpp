@@ -46,22 +46,9 @@ std::pair<ProcessorReturnCode, std::shared_ptr<Processor>> ClapProcessorFactory:
                                                                                                HostControl& host_control,
                                                                                                float sample_rate)
 {
-    int plugin_index = 0;
-    if (!plugin_info.uid.empty())
-    {
-        try
-        {
-            plugin_index = std::stoi(plugin_info.uid);
-        }
-        catch (...)
-        {
-            ELKLOG_LOG_WARNING("Could not parse CLAP plugin uid '{}' as index, using 0", plugin_info.uid);
-        }
-    }
-
     auto processor = std::make_shared<ClapWrapper>(host_control,
                                                     plugin_info.path,
-                                                    plugin_index,
+                                                    plugin_info.uid,
                                                     _host_context.get());
     auto processor_status = processor->init(sample_rate);
     return {processor_status, processor};

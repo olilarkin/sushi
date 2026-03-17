@@ -59,6 +59,7 @@ inline std::vector<control::ParameterInfo> _read_parameters(const Processor* pro
             info.automatable = param->automatable();
             info.min_domain_value = param->min_domain_value();
             info.max_domain_value = param->max_domain_value();
+            info.is_enumeration = param->is_enumeration();
             infos.push_back(info);
         }
     }
@@ -144,6 +145,7 @@ std::pair<control::ControlStatus, control::ParameterInfo> ParameterController::g
             info.min_domain_value = descr->min_domain_value();
             info.max_domain_value = descr->max_domain_value();
             info.automatable = descr->automatable();
+            info.is_enumeration = descr->is_enumeration();
 
             return {control::ControlStatus::OK, info};
         }
