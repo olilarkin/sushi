@@ -19,30 +19,53 @@ import FaustSwiftUI
 
 // MARK: - View Model
 
+typealias FaustParamChangeCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?, Float) -> Void
+
 class SushiFaustViewModel: FaustUIValueBinding {
     private var zones: [String: UnsafeMutablePointer<Float>] = [:]
+    private var values: [String: Double] = [:]
+    private var paramChangeCallback: FaustParamChangeCallback?
+    private var paramChangeContext: UnsafeMutableRawPointer?
 
     func setZone(_ address: String, pointer: UnsafeMutablePointer<Float>) {
         zones[address] = pointer
+        values[address] = Double(pointer.pointee)
     }
 
     func clearZones() {
         zones.removeAll()
+        values.removeAll()
+    }
+
+    func setParameterChangeCallback(_ callback: FaustParamChangeCallback?,
+                                     context: UnsafeMutableRawPointer?) {
+        paramChangeCallback = callback
+        paramChangeContext = context
     }
 
     func getValue(for address: String, default defaultValue: Double) -> Double {
-        guard let zone = zones[address] else {
-            return defaultValue
-        }
-        return Double(zone.pointee)
+        return values[address] ?? defaultValue
     }
 
+    /// Called by SwiftUI when the user moves a slider
     func setValue(_ value: Double, for address: String) {
         guard let zone = zones[address] else {
             return
         }
+        values[address] = value
         objectWillChange.send()
         zone.pointee = Float(value)
+        if let callback = paramChangeCallback {
+            address.withCString { cStr in
+                callback(paramChangeContext, cStr, Float(value))
+            }
+        }
+    }
+
+    /// Called from C++ via Faust GUI::updateAllZones() callback when a zone changed externally
+    func updateValue(_ address: String, value: Double) {
+        values[address] = value
+        objectWillChange.send()
     }
 }
 
@@ -66,6 +89,24 @@ func SushiFaustViewModel_setZone(_ vmPtr: UnsafeMutableRawPointer,
 func SushiFaustViewModel_clearZones(_ vmPtr: UnsafeMutableRawPointer) {
     let vm = Unmanaged<SushiFaustViewModel>.fromOpaque(vmPtr).takeUnretainedValue()
     vm.clearZones()
+}
+
+@_cdecl("SushiFaustViewModel_setParameterChangeCallback")
+func SushiFaustViewModel_setParameterChangeCallback(
+    _ vmPtr: UnsafeMutableRawPointer,
+    _ callback: FaustParamChangeCallback?,
+    _ context: UnsafeMutableRawPointer?
+) {
+    let vm = Unmanaged<SushiFaustViewModel>.fromOpaque(vmPtr).takeUnretainedValue()
+    vm.setParameterChangeCallback(callback, context: context)
+}
+
+@_cdecl("SushiFaustViewModel_updateValue")
+func SushiFaustViewModel_updateValue(_ vmPtr: UnsafeMutableRawPointer,
+                                      _ address: UnsafePointer<CChar>,
+                                      _ value: Float) {
+    let vm = Unmanaged<SushiFaustViewModel>.fromOpaque(vmPtr).takeUnretainedValue()
+    vm.updateValue(String(cString: address), value: Double(value))
 }
 
 @_cdecl("SushiFaustViewModel_release")

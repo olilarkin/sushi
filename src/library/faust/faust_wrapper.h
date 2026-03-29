@@ -64,6 +64,7 @@ public:
     std::string ui_json() const;
     const std::vector<FaustParameterInfo>& current_parameters() const;
     void set_editor_recompile_callback(EditorRecompileCallback callback);
+    void notify_parameter_change_from_editor(ObjectId parameter_id, float normalized_value);
 
     std::pair<ProcessorReturnCode, float> parameter_value(ObjectId parameter_id) const override;
     std::pair<ProcessorReturnCode, float> parameter_value_in_domain(ObjectId parameter_id) const override;

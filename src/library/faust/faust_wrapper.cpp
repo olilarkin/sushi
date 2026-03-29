@@ -510,6 +510,17 @@ void FaustWrapper::set_editor_recompile_callback(EditorRecompileCallback callbac
     _editor_recompile_callback = std::move(callback);
 }
 
+void FaustWrapper::notify_parameter_change_from_editor(ObjectId parameter_id, float normalized_value)
+{
+    auto event = std::make_unique<ParameterChangeEvent>(
+        ParameterChangeEvent::Subtype::FLOAT_PARAMETER_CHANGE,
+        this->id(),
+        parameter_id,
+        std::clamp(normalized_value, 0.0f, 1.0f),
+        IMMEDIATE_PROCESS);
+    _host_control.post_event(std::move(event));
+}
+
 std::pair<ProcessorReturnCode, float> FaustWrapper::parameter_value(ObjectId parameter_id) const
 {
     auto* rt = const_cast<FaustWrapper*>(this)->_load_runtime();

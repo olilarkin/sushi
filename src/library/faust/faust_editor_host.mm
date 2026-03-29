@@ -15,10 +15,14 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <map>
+#include <string>
+
 #include "elklog/static_logger.h"
 
 #include "faust_editor_host.h"
 #include "faust_wrapper.h"
+#include "faust/gui/GUI.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +32,10 @@ extern "C" {
 void* SushiFaustViewModel_create(void);
 void SushiFaustViewModel_setZone(void* vm, const char* address, float* zone);
 void SushiFaustViewModel_clearZones(void* vm);
+void SushiFaustViewModel_setParameterChangeCallback(void* vm,
+    void (*callback)(void* context, const char* address, float domain_value),
+    void* context);
+void SushiFaustViewModel_updateValue(void* vm, const char* address, float value);
 void SushiFaustViewModel_release(void* vm);
 
 void* SushiFaustEditorView_create(const char* json, void* viewModel);
@@ -37,6 +45,10 @@ void SushiFaustEditorView_release(void* view);
 #ifdef __cplusplus
 }
 #endif
+
+// Static member definitions for Faust's header-only GUI class
+std::list<GUI*> GUI::fGuiList;
+ztimedmap GUI::gTimedZoneMap;
 
 namespace sushi::internal::faust_wrapper {
 
@@ -82,10 +94,86 @@ void remove_native_view(void* native_view)
 
 } // namespace
 
+struct FaustParamMapping
+{
+    ObjectId param_id;
+    float min;
+    float max;
+};
+
+// Faust GUI callback context — passed as user data to uiCallbackItem
+struct ZoneCallbackContext
+{
+    void* view_model;
+    std::string address;
+};
+
 struct FaustEditorHost::Impl
 {
-    void* view_model{nullptr};  // Retained SushiFaustViewModel*
-    void* editor_view{nullptr}; // Retained SushiFaustEditorView (NSView*)
+    void* view_model{nullptr};
+    void* editor_view{nullptr};
+    std::map<std::string, FaustParamMapping> address_to_param;
+
+    // Faust GUI instance — owns uiCallbackItems that fire on zone changes
+    std::unique_ptr<GUI> gui;
+    std::vector<std::unique_ptr<ZoneCallbackContext>> callback_contexts;
+    NSTimer* sync_timer{nil};
+
+    void startSyncTimer()
+    {
+        sync_timer = [NSTimer scheduledTimerWithTimeInterval:1.0 / 30.0
+                                                    repeats:YES
+                                                      block:^(NSTimer*) {
+            if (gui)
+            {
+                gui->updateAllZones();
+            }
+        }];
+    }
+
+    void stopSyncTimer()
+    {
+        [sync_timer invalidate];
+        sync_timer = nil;
+    }
+
+    void setupGui(const std::vector<FaustParameterInfo>& params, void* vm)
+    {
+        gui = std::make_unique<GUI>();
+        callback_contexts.clear();
+
+        for (size_t i = 0; i < params.size(); ++i)
+        {
+            const auto& param = params[i];
+
+            std::string address = param.full_path;
+            if (!address.empty() && address[0] != '/')
+            {
+                address = "/" + address;
+            }
+
+            auto ctx = std::make_unique<ZoneCallbackContext>();
+            ctx->view_model = vm;
+            ctx->address = address;
+
+            gui->addCallback(param.zone,
+                [](FAUSTFLOAT val, void* data)
+                {
+                    auto* cb = static_cast<ZoneCallbackContext*>(data);
+                    SushiFaustViewModel_updateValue(cb->view_model, cb->address.c_str(), val);
+                },
+                ctx.get());
+
+            callback_contexts.push_back(std::move(ctx));
+        }
+    }
+
+    void teardownGui()
+    {
+        stopSyncTimer();
+        gui.reset();
+        callback_contexts.clear();
+    }
 };
 
 FaustEditorHost::FaustEditorHost(FaustWrapper& wrapper,
@@ -127,22 +215,50 @@ std::pair<bool, FaustEditorRect> FaustEditorHost::open(void* parent_handle)
         return {false, {0, 0}};
     }
 
-    for (const auto& param : params)
+    _impl->address_to_param.clear();
+    for (size_t i = 0; i < params.size(); ++i)
     {
-        // JSONUI addresses start with '/' — prepend if needed to match
+        const auto& param = params[i];
         std::string address = param.full_path;
         if (!address.empty() && address[0] != '/')
         {
             address = "/" + address;
         }
         SushiFaustViewModel_setZone(_impl->view_model, address.c_str(), param.zone);
+
+        if (!param.is_bargraph)
+        {
+            _impl->address_to_param[address] = {static_cast<ObjectId>(i), param.min, param.max};
+        }
     }
+
+    // Set up callback so editor-originated changes notify the host
+    SushiFaustViewModel_setParameterChangeCallback(
+        _impl->view_model,
+        [](void* context, const char* address, float domain_value)
+        {
+            auto* self = static_cast<FaustEditorHost*>(context);
+            auto it = self->_impl->address_to_param.find(address);
+            if (it == self->_impl->address_to_param.end())
+            {
+                return;
+            }
+            auto& mapping = it->second;
+            float range = mapping.max - mapping.min;
+            float normalized = (range > 0.0f) ? (domain_value - mapping.min) / range : 0.0f;
+            self->_wrapper.notify_parameter_change_from_editor(mapping.param_id, normalized);
+        },
+        this);
+
+    // Register Faust GUI callbacks so zone changes push into the SwiftUI ViewModel
+    _impl->setupGui(params, _impl->view_model);
 
     // Create SwiftUI editor view
     _impl->editor_view = SushiFaustEditorView_create(json.c_str(), _impl->view_model);
     if (!_impl->editor_view)
     {
         ELKLOG_LOG_ERROR("Failed to create Faust editor view");
+        _impl->teardownGui();
         SushiFaustViewModel_release(_impl->view_model);
         _impl->view_model = nullptr;
         return {false, {0, 0}};
@@ -156,6 +272,7 @@ std::pair<bool, FaustEditorRect> FaustEditorHost::open(void* parent_handle)
     {
         ELKLOG_LOG_ERROR("Failed to attach Faust editor view");
         SushiFaustEditorView_release(_impl->editor_view);
+        _impl->teardownGui();
         SushiFaustViewModel_release(_impl->view_model);
         _impl->editor_view = nullptr;
         _impl->view_model = nullptr;
@@ -166,6 +283,9 @@ std::pair<bool, FaustEditorRect> FaustEditorHost::open(void* parent_handle)
 
     _parent_handle = parent_handle;
     _is_open = true;
+
+    // Start the sync timer — calls GUI::updateAllZones() at 30Hz on the main thread
+    _impl->startSyncTimer();
 
     // Register recompile callback
     _wrapper.set_editor_recompile_callback([this]()
@@ -181,18 +301,29 @@ std::pair<bool, FaustEditorRect> FaustEditorHost::open(void* parent_handle)
             SushiFaustEditorView_release(this->_impl->editor_view);
             this->_impl->editor_view = nullptr;
 
-            // Refresh zone pointers
+            // Rebuild GUI callbacks and zone pointers
+            this->_impl->teardownGui();
             SushiFaustViewModel_clearZones(this->_impl->view_model);
+            this->_impl->address_to_param.clear();
+
             auto new_params = this->_wrapper.current_parameters();
-            for (const auto& param : new_params)
+            for (size_t i = 0; i < new_params.size(); ++i)
             {
+                const auto& param = new_params[i];
                 std::string address = param.full_path;
                 if (!address.empty() && address[0] != '/')
                 {
                     address = "/" + address;
                 }
                 SushiFaustViewModel_setZone(this->_impl->view_model, address.c_str(), param.zone);
+
+                if (!param.is_bargraph)
+                {
+                    this->_impl->address_to_param[address] = {static_cast<ObjectId>(i), param.min, param.max};
+                }
             }
+
+            this->_impl->setupGui(new_params, this->_impl->view_model);
 
             // Create new view with new JSON
             auto new_json = this->_wrapper.ui_json();
@@ -209,6 +340,8 @@ std::pair<bool, FaustEditorRect> FaustEditorHost::open(void* parent_handle)
 
             add_child_view(this->_parent_handle, this->_impl->editor_view);
             set_view_size(this->_impl->editor_view, new_width, new_height);
+
+            this->_impl->startSyncTimer();
 
             if (this->_resize_callback)
             {
@@ -239,6 +372,8 @@ void FaustEditorHost::close()
 
     _wrapper.set_editor_recompile_callback({});
 
+    _impl->teardownGui();
+
     if (_impl->editor_view)
     {
         remove_native_view(_impl->editor_view);
@@ -248,10 +383,12 @@ void FaustEditorHost::close()
 
     if (_impl->view_model)
     {
+        SushiFaustViewModel_setParameterChangeCallback(_impl->view_model, nullptr, nullptr);
         SushiFaustViewModel_release(_impl->view_model);
         _impl->view_model = nullptr;
     }
 
+    _impl->address_to_param.clear();
     _parent_handle = nullptr;
     _is_open = false;
 
