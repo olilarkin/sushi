@@ -116,9 +116,9 @@ public:
             {
                 auto* cn = static_cast<const CpuTimingNotification*>(notification);
                 auto timings = cn->cpu_timings();
-                float avg = timings.avg;
-                float mn = timings.min;
-                float mx = timings.max;
+                float avg = timings.main.avg;
+                float mn = timings.main.min;
+                float mx = timings.main.max;
                 SushiStatusBar* owner = _owner;
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [owner handleCpuTimingsAvg:avg min:mn max:mx];
@@ -277,7 +277,7 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
     _syncMode = transport->get_sync_mode();
     _tempo = transport->get_tempo();
     _timeSig = transport->get_time_signature();
-    _cpuTimings = {0, 0, 0};
+    _cpuTimings = {};
     _trackCacheDirty = true;
 
     _audioInfoString = [NSString stringWithFormat:@"%@ (%.0f Hz, buf %d) | I/O: %din / %dout",
@@ -373,9 +373,9 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
 - (void)handleCpuTimingsAvg:(float)avg min:(float)min max:(float)max
 {
-    _cpuTimings = {std::min(avg * 100.0f, 100.0f),
-                   std::min(min * 100.0f, 100.0f),
-                   std::min(max * 100.0f, 100.0f)};
+    _cpuTimings = {{std::min(avg * 100.0f, 100.0f),
+                    std::min(min * 100.0f, 100.0f),
+                    std::min(max * 100.0f, 100.0f)}, {}};
     [self updateButtonTitle];
 }
 
@@ -386,9 +386,9 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
 - (void)updateButtonTitle
 {
-    if (_cpuTimings.avg > 0.01f)
+    if (_cpuTimings.main.avg > 0.01f)
     {
-        _statusItem.button.title = [NSString stringWithFormat:@" %.0f%%", _cpuTimings.avg];
+        _statusItem.button.title = [NSString stringWithFormat:@" %.0f%%", _cpuTimings.main.avg];
     }
     else
     {
@@ -455,7 +455,7 @@ static void apply_plugin_type_badge(NSMenuItem* item, PluginType type)
 
     // CPU line
     auto* cpuItem = [[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"CPU: avg %.1f%%  max %.1f%%",
-                                                       _cpuTimings.avg, _cpuTimings.max]
+                                                       _cpuTimings.main.avg, _cpuTimings.main.max]
                                                action:nil
                                         keyEquivalent:@""];
     cpuItem.enabled = NO;

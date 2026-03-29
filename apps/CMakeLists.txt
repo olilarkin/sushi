@@ -129,7 +129,7 @@ if(APPLE AND (SUSHI_WITH_VST3 OR SUSHI_WITH_CLAP OR SUSHI_WITH_AUV2 OR SUSHI_WIT
             "-L/usr/lib/swift"
         )
     else()
-        target_link_libraries(sushi-gui PRIVATE sushi_library ${APP_LINK_LIBRARIES} "-framework Cocoa")
+        target_link_libraries(sushi-gui PRIVATE sushi_library ${APP_LINK_LIBRARIES} "-framework Cocoa -framework ScreenCaptureKit")
     endif()
 
     set_target_properties(sushi-gui PROPERTIES
