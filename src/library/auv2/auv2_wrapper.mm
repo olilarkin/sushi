@@ -986,8 +986,12 @@ bool AUv2Wrapper::_register_parameters()
             (param_info.flags & kAudioUnitParameterFlag_ValuesHaveStrings) != 0;
         const bool is_indexed = param_info.unit == kAudioUnitParameterUnit_Indexed;
         const int value_string_count = getParameterValueStringCount(_audio_unit, param_ids[i]);
+        // is_enumeration: true only when the AU provides a real indexed value list
+        // (kAudioUnitParameterUnit_Indexed or kAudioUnitProperty_ParameterValueStrings).
+        // kAudioUnitParameterFlag_ValuesHaveStrings alone means "call ParameterStringFromValue
+        // for display formatting" — NOT an enumerated list (per Apple SDK docs).
         const bool is_enumeration = is_indexed || value_string_count > 1;
-        const bool is_discrete_integer = is_enumeration || has_value_strings;
+        const bool is_discrete_integer = is_enumeration;
 
         if (is_boolean)
         {
