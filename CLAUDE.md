@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sushi is a headless plugin host for Elk Audio OS, written in C++20. It supports multiple audio frontends (JACK, PortAudio, Core Audio, RASPA/Xenomai) and plugin formats (VST2, VST3, LV2, CLAP, AUv2, Cmajor, JSFX, Faust). It can run as a standalone application or be embedded as a library. On macOS, `sushi-gui` provides a Cocoa status bar app with plugin editor window hosting.
+Sushi is a headless plugin host for Elk Audio OS, written in C++20. It supports multiple audio frontends (JACK, PortAudio, Core Audio, RASPA/Xenomai) and plugin formats (VST2, VST3, LV2, CLAP, AUv2, Cmajor, JSFX, Faust, SuperCollider). It can run as a standalone application or be embedded as a library. On macOS, `sushi-gui` provides a Cocoa status bar app with plugin editor window hosting.
 
 ## Build Commands
 
@@ -32,7 +32,7 @@ export SUSHI_TEST_DATA_DIR=$(pwd)/../test/data
 ./test/unit_tests --gtest_filter=TestName.SubTest
 ```
 
-Key CMake options: `SUSHI_WITH_JACK`, `SUSHI_WITH_PORTAUDIO`, `SUSHI_WITH_APPLE_COREAUDIO`, `SUSHI_WITH_VST3`, `SUSHI_WITH_LV2`, `SUSHI_WITH_CLAP`, `SUSHI_WITH_AUV2`, `SUSHI_WITH_CMAJOR`, `SUSHI_WITH_JSFX`, `SUSHI_WITH_FAUST`, `SUSHI_FAUST_WITH_LLVM`, `SUSHI_WITH_RPC_INTERFACE`, `SUSHI_WITH_LINK`, `SUSHI_BUILD_STANDALONE_APP`, `SUSHI_BUILD_WITH_SANITIZERS`, `SUSHI_AUDIO_BUFFER_SIZE` (8-512, default 64; fixed at compile time).
+Key CMake options: `SUSHI_WITH_JACK`, `SUSHI_WITH_PORTAUDIO`, `SUSHI_WITH_APPLE_COREAUDIO`, `SUSHI_WITH_VST3`, `SUSHI_WITH_LV2`, `SUSHI_WITH_CLAP`, `SUSHI_WITH_AUV2`, `SUSHI_WITH_CMAJOR`, `SUSHI_WITH_JSFX`, `SUSHI_WITH_FAUST`, `SUSHI_FAUST_WITH_LLVM`, `SUSHI_WITH_SUPERCOLLIDER`, `SUSHI_WITH_RPC_INTERFACE`, `SUSHI_WITH_LINK`, `SUSHI_BUILD_STANDALONE_APP`, `SUSHI_BUILD_WITH_SANITIZERS`, `SUSHI_AUDIO_BUFFER_SIZE` (8-512, default 64; fixed at compile time).
 
 ## Architecture
 
@@ -99,7 +99,7 @@ Cocoa status bar app (`apps/main_cocoa.mm`, `apps/sushi_status_bar.mm`) that hos
 ### Key Directories
 
 - `src/engine/` — audio engine, graph, transport, event dispatcher, controllers
-- `src/library/` — plugin format wrappers (vst2x/, vst3x/, lv2/, clap/, auv2/, cmajor/, jsfx/, faust/) and base processor
+- `src/library/` — plugin format wrappers (vst2x/, vst3x/, lv2/, clap/, auv2/, cmajor/, jsfx/, faust/, supercollider/) and base processor
 - `apps/` — standalone and sushi-gui Cocoa application entry points
 - `src/audio_frontends/` — platform audio I/O (JACK, PortAudio, CoreAudio, RASPA)
 - `src/plugins/` — 20+ built-in plugins including brickworks DSP suite
@@ -131,4 +131,5 @@ LLVM-based style configured in `.clang-format`: 4-space indentation, braces on n
 - Faust has two backends: interpreter (always) and LLVM JIT (opt-in via `SUSHI_FAUST_WITH_LLVM`)
 - `SUSHI_TEST_DATA_DIR` env var must be set for manual test runs; for VST3 tests, set working directory to `build/test/`
 - Cmajor supports inline source in JSON configs (`source_code` field) or patch files (`path` field)
+- SuperCollider support (`SUSHI_WITH_SUPERCOLLIDER`, off by default) embeds the JUCE-free Supersonic scsynth core (`third-party/supersonic` submodule) as a `supersonic_core` static lib; the wrapper lives in `src/library/supercollider/` and talks to it only through `supersonic_bridge.h`. Single-instance per process (scsynth has process-global state), stereo in/out, NRT mode, OSC-driven, no GUI editor, built with `NO_LIBSNDFILE`
 - AUv2 and sushi-gui Cocoa code uses Objective-C++ (`.mm` files) with ARC (`-fobjc-arc`)

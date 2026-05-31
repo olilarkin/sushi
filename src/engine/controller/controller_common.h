@@ -163,6 +163,7 @@ inline PluginType to_internal(control::PluginType type)
         case control::PluginType::CMAJOR:     return PluginType::CMAJOR;
         case control::PluginType::JSFX:       return PluginType::JSFX;
         case control::PluginType::FAUST:      return PluginType::FAUST;
+        case control::PluginType::SUPERCOLLIDER: return PluginType::SUPERCOLLIDER;
         default:                              return PluginType::INTERNAL;
     }
 }
@@ -180,6 +181,7 @@ inline control::PluginType to_external(PluginType type)
         case PluginType::CMAJOR:     return control::PluginType::CMAJOR;
         case PluginType::JSFX:       return control::PluginType::JSFX;
         case PluginType::FAUST:      return control::PluginType::FAUST;
+        case PluginType::SUPERCOLLIDER: return control::PluginType::SUPERCOLLIDER;
         default:                     return control::PluginType::INTERNAL;
     }
 }
