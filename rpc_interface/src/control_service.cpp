@@ -238,6 +238,7 @@ inline void to_grpc(ParameterInfo& dest, const sushi::control::ParameterInfo& sr
     dest.set_automatable(src.automatable);
     dest.set_min_domain_value(src.min_domain_value);
     dest.set_max_domain_value(src.max_domain_value);
+    dest.set_is_enumeration(src.is_enumeration);
 }
 
 //inline void to_grpc(ParameterIdentifier& dest, const sushi::control::ParameterChangeNotifica
@@ -256,6 +257,10 @@ inline void to_grpc(sushi_rpc::ProcessorInfo& dest, const sushi::control::Proces
     dest.set_name(src.name);
     dest.set_parameter_count(src.parameter_count);
     dest.set_program_count(src.program_count);
+    dest.set_input_channels(src.input_channels);
+    dest.set_output_channels(src.output_channels);
+    dest.set_supports_midi_input(src.supports_midi_input);
+    dest.set_supports_midi_output(src.supports_midi_output);
 }
 
 inline void to_grpc(sushi_rpc::MidiKbdConnection& dest, const sushi::control::MidiKbdConnection& src)
@@ -1338,6 +1343,21 @@ grpc::Status ParameterControlService::GetParameterValueAsString(grpc::ServerCont
                                                             sushi_rpc::StringResponse* response)
 {
     auto [status, value] = _controller->get_parameter_value_as_string(request->processor_id(), request->parameter_id());
+    if (status == sushi::control::ControlStatus::OK)
+    {
+        response->set_value(value);
+    }
+    response->mutable_status()->set_status(to_grpc(status));
+    return grpc::Status::OK;
+}
+
+grpc::Status ParameterControlService::GetParameterValueAsStringFromValue(grpc::ServerContext* /*context*/,
+                                                            const sushi_rpc::ParameterValue* request,
+                                                            sushi_rpc::StringResponse* response)
+{
+    auto [status, value] = _controller->get_parameter_value_as_string(request->parameter().processor_id(),
+                                                                       request->parameter().parameter_id(),
+                                                                       request->value());
     if (status == sushi::control::ControlStatus::OK)
     {
         response->set_value(value);

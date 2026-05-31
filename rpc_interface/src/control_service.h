@@ -171,6 +171,7 @@ public:
     grpc::Status GetParameterValue(grpc::ServerContext* context, const sushi_rpc::ParameterIdentifier* request, sushi_rpc::FloatResponse* response) override;
     grpc::Status GetParameterValueInDomain(grpc::ServerContext* context, const sushi_rpc::ParameterIdentifier* request, sushi_rpc::FloatResponse* response) override;
     grpc::Status GetParameterValueAsString(grpc::ServerContext* context, const sushi_rpc::ParameterIdentifier* request, sushi_rpc::StringResponse* response) override;
+    grpc::Status GetParameterValueAsStringFromValue(grpc::ServerContext* context, const sushi_rpc::ParameterValue* request, sushi_rpc::StringResponse* response) override;
     grpc::Status SetParameterValue(grpc::ServerContext* context, const sushi_rpc::ParameterValue* request, sushi_rpc::CommandResponse* response) override;
 
     grpc::Status GetTrackProperties(grpc::ServerContext* context, const sushi_rpc::TrackIdentifier* request, sushi_rpc::PropertyInfoListResponse* response) override;
