@@ -50,3 +50,6 @@
 [submodule "third-party/FaustSwiftUI"]
 	path = third-party/FaustSwiftUI
 	url = git@github.com:olilarkin/FaustSwiftUI.git
+[submodule "third-party/supersonic"]
+	path = third-party/supersonic
+	url = https://github.com/samaaron/supersonic.git

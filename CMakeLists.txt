@@ -63,6 +63,7 @@ set(SUSHI_WITH_AUV2_DEFAULT OFF)
 set(SUSHI_WITH_CMAJOR_DEFAULT OFF)
 set(SUSHI_WITH_JSFX_DEFAULT OFF)
 set(SUSHI_WITH_FAUST_DEFAULT OFF)
+set(SUSHI_WITH_SUPERCOLLIDER_DEFAULT OFF)
 set(SUSHI_WITH_VST3_DEFAULT ON)
 set(SUSHI_LINK_VST3_DEFAULT ON)
 set(SUSHI_WITH_LINK_DEFAULT ON)
@@ -149,6 +150,7 @@ option(SUSHI_WITH_CMAJOR "Enable Cmajor support" ${SUSHI_WITH_CMAJOR_DEFAULT})
 option(SUSHI_WITH_JSFX "Enable JSFX support" ${SUSHI_WITH_JSFX_DEFAULT})
 option(SUSHI_WITH_FAUST "Enable Faust DSP support" ${SUSHI_WITH_FAUST_DEFAULT})
 option(SUSHI_FAUST_WITH_LLVM "Enable Faust LLVM JIT backend (requires LLVM)" OFF)
+option(SUSHI_WITH_SUPERCOLLIDER "Enable SuperCollider support via the embedded Supersonic scsynth engine" ${SUSHI_WITH_SUPERCOLLIDER_DEFAULT})
 option(SUSHI_WITH_VST3 "Enable Vst 3 support" ${SUSHI_WITH_VST3_DEFAULT})
 option(SUSHI_LINK_VST3 "Link Vst 3 library to Sushi" ${SUSHI_LINK_VST3_DEFAULT})
 option(SUSHI_WITH_LV2 "Enable LV2 support" ${SUSHI_WITH_LV2_DEFAULT})
@@ -652,6 +654,160 @@ if (${SUSHI_WITH_FAUST})
     endif()
 endif()
 
+######################
+# SuperCollider setup #
+######################
+
+# Builds the JUCE-free Supersonic scsynth core (the same source set the
+# WebAssembly target compiles, but native) as a static library, and wraps it
+# as a Sushi processor. No JUCE, no audio device backends, no UDP server —
+# audio + OSC flow directly through the embedded ring buffer.
+if (${SUSHI_WITH_SUPERCOLLIDER})
+    message("Building with SuperCollider (Supersonic) support.")
+
+    set(SUPERSONIC_DIR "${PROJECT_SOURCE_DIR}/third-party/supersonic")
+    set(SUPERSONIC_SRC "${SUPERSONIC_DIR}/src")
+
+    if (NOT EXISTS "${SUPERSONIC_SRC}/audio_processor.cpp")
+        message(FATAL_ERROR "Supersonic submodule not found at ${SUPERSONIC_DIR}. "
+                            "Run: git submodule update --init --recursive")
+    endif()
+
+    # scsynth server sources (cross-platform subset; excludes WASM-only and
+    # platform-specific driver files).
+    set(SUPERSONIC_SERVER_SOURCES
+        ${SUPERSONIC_SRC}/scsynth/server/SC_BufGen.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Graph.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_GraphDef.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Group.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Lib.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Lib_Cintf.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_MiscCmds.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Node.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_OscUnroll.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Rate.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_SequencedCommand.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Str4.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Stubs.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_Unit.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_UnitDef.cpp
+        ${SUPERSONIC_SRC}/scsynth/server/SC_World.cpp)
+
+    set(SUPERSONIC_COMMON_SOURCES
+        ${SUPERSONIC_SRC}/scsynth/common/SC_AllocPool.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_Errors.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_Reply.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_ServerBootDelayWarning.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_StringBuffer.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_StringParser.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_TextUtils.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/SC_fftlib.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/Samp.cpp
+        ${SUPERSONIC_SRC}/scsynth/common/fftlib.c)
+
+    if (WIN32)
+        list(APPEND SUPERSONIC_COMMON_SOURCES
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Filesystem_win.cpp
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Win32Utils.cpp)
+    elseif (APPLE)
+        set_source_files_properties(
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Filesystem_macos.cpp
+            PROPERTIES LANGUAGE OBJCXX)
+        list(APPEND SUPERSONIC_COMMON_SOURCES
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Filesystem_macos.cpp
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Apple.mm)
+    elseif (UNIX)
+        list(APPEND SUPERSONIC_COMMON_SOURCES
+            ${SUPERSONIC_SRC}/scsynth/common/SC_Filesystem_unix.cpp)
+    endif()
+
+    # scsynth UGen plugins (compiled in statically; MdaUGens excluded — it
+    # embeds 1.1MB of piano samples).
+    file(GLOB SUPERSONIC_PLUGIN_SOURCES
+        "${SUPERSONIC_SRC}/scsynth/plugins/*.cpp")
+    list(FILTER SUPERSONIC_PLUGIN_SOURCES EXCLUDE REGEX "MdaUGens\\.cpp$")
+    list(APPEND SUPERSONIC_PLUGIN_SOURCES
+        ${SUPERSONIC_SRC}/scsynth/plugins/sc3-plugins/DistortionUGens.cpp)
+
+    add_library(supersonic_core STATIC
+        ${SUPERSONIC_SRC}/audio_processor.cpp
+        ${SUPERSONIC_SRC}/buffer_commands.cpp
+        ${SUPERSONIC_SRC}/node_tree.cpp
+        ${SUPERSONIC_SRC}/supersonic_heap.cpp
+        ${SUPERSONIC_SRC}/SuperClock.cpp
+        ${SUPERSONIC_SERVER_SOURCES}
+        ${SUPERSONIC_COMMON_SOURCES}
+        ${SUPERSONIC_PLUGIN_SOURCES}
+        ${SUPERSONIC_SRC}/vendor/oscpack/osc/OscTypes.cpp
+        ${SUPERSONIC_SRC}/vendor/oscpack/osc/OscOutboundPacketStream.cpp
+        ${SUPERSONIC_SRC}/vendor/oscpack/osc/OscReceivedElements.cpp
+        ${SUPERSONIC_SRC}/scsynth/external_libraries/TLSF-2.4.6/src/tlsf.c
+        # Sushi's dependency-isolating bridge — compiled here so it sees the
+        # Supersonic include surface; everything else in Sushi only sees bridge.h.
+        ${PROJECT_SOURCE_DIR}/src/library/supercollider/supersonic_bridge.cpp)
+
+    target_include_directories(supersonic_core PRIVATE
+        # NativeShim first — provides the <emscripten/emscripten.h> stub so the
+        # WASM-oriented core compiles natively without Emscripten.
+        ${SUPERSONIC_SRC}/native/NativeShim
+        ${SUPERSONIC_SRC}
+        ${SUPERSONIC_DIR}
+        ${SUPERSONIC_SRC}/scsynth/include/common
+        ${SUPERSONIC_SRC}/scsynth/include/plugin_interface
+        ${SUPERSONIC_SRC}/scsynth/include/server
+        ${SUPERSONIC_SRC}/scsynth/server
+        ${SUPERSONIC_SRC}/scsynth/common
+        ${SUPERSONIC_SRC}/scsynth/external_libraries/boost
+        ${SUPERSONIC_SRC}/scsynth/external_libraries/nova-simd
+        ${SUPERSONIC_SRC}/scsynth/external_libraries/TLSF-2.4.6/src
+        ${SUPERSONIC_SRC}/vendor/oscpack)
+
+    target_compile_definitions(supersonic_core PRIVATE
+        SUPERSONIC=1
+        STATIC_PLUGINS=1
+        NOVA_SIMD=1
+        SC_FFT_GREEN=1
+        NDEBUG=1
+        NOMINMAX=1
+        SC_AUDIO_API=3
+        NO_LIBSNDFILE=1
+        TLSF_STATISTIC=0
+        SCHEDULER_DATA_POOL_SIZE=524288
+        SCHEDULER_SLOT_COUNT=512
+        NODE_TREE_MIRROR_MAX_NODES=1024
+        SUPERSONIC_SHM_AUDIO_SECONDS=1)
+
+    set_target_properties(supersonic_core PROPERTIES
+        POSITION_INDEPENDENT_CODE TRUE
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON)
+
+    if (MSVC)
+        target_compile_options(supersonic_core PRIVATE
+            /W0 /wd4244 /wd4267 /wd4305 /wd4800 /wd4996 /permissive-)
+    else()
+        # scsynth predates -fno-rtti; keep RTTI + exceptions on for this target.
+        target_compile_options(supersonic_core PRIVATE
+            -w -frtti -fexceptions -fno-math-errno -fsigned-zeros)
+    endif()
+
+    if (WIN32)
+        target_link_libraries(supersonic_core PUBLIC Ws2_32 winmm)
+    elseif (UNIX AND NOT APPLE)
+        find_package(Threads REQUIRED)
+        target_link_libraries(supersonic_core PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+    endif()
+
+    set(ADDITIONAL_SUPERCOLLIDER_SOURCES
+        src/library/supercollider/supercollider_wrapper.h
+        src/library/supercollider/supercollider_wrapper.cpp
+        src/library/supercollider/supercollider_processor_factory.h
+        src/library/supercollider/supercollider_processor_factory.cpp)
+
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} supersonic_core)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DSUSHI_BUILD_WITH_SUPERCOLLIDER)
+endif()
+
 ###############
 # VST 3 setup #
 ###############
@@ -959,6 +1115,7 @@ add_library(${PROJECT_NAME} STATIC "${SOURCE_FILES}"
                                    "${ADDITIONAL_CMAJOR_SOURCES}"
                                    "${ADDITIONAL_JSFX_SOURCES}"
                                    "${ADDITIONAL_FAUST_SOURCES}"
+                                   "${ADDITIONAL_SUPERCOLLIDER_SOURCES}"
                                    "${ADDITIONAL_LV2_SOURCES}"
                                    "${ADDITIONAL_CMAJOR_OBJECTS}"
                                    "${MIDI_SOURCES}")

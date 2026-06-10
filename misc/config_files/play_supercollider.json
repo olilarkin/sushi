@@ -1,0 +1,26 @@
+{
+    "host_config" : {
+        "samplerate" : 48000
+    },
+    "tracks" : [
+        {
+            "name" : "main",
+            "channels" : 2,
+            "inputs" : [],
+            "outputs" : [
+                {
+                    "engine_bus" : 0,
+                    "track_bus" : 0
+                }
+            ],
+            "plugins" : [
+                {
+                    "name" : "scsynth",
+                    "type" : "supercollider",
+                    "path" : "misc/config_files/supercollider/sine.scsyndef",
+                    "source_code" : "# Commands run once at startup (one OSC message per line).\n# '#' lines are comments. Arguments are typed automatically:\n# integers -> int32, values with a '.' -> float, everything else -> string.\n/s_new sine -1 0 0 freq 440 amp 0.2"
+                }
+            ]
+        }
+    ]
+}

@@ -63,7 +63,8 @@ enum class PluginType
     AUV2,
     CMAJOR,
     JSFX,
-    FAUST
+    FAUST,
+    SUPERCOLLIDER
 };
 
 /**
